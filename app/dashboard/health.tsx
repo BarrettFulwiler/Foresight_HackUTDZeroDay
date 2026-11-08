@@ -14,7 +14,9 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.p
 // They update when balances change (e.g. after a transfer on the Move tab).
 // `cuts` are the budget changes from the Edit tab, so these cards reflect them.
 const NO_CUTS: Record<string, number> = {};
-export default function Health({ accounts, schedule, asOf, units, cuts = NO_CUTS }: { accounts: Account[]; schedule: ScheduleEvent[]; asOf: string; units: "dollars" | "days"; cuts?: Record<string, number> }) {
+// business: the company dashboard. The third card then shows payroll coverage instead of interest
+// (Nessie gives no interest rates for company accounts).
+export default function Health({ accounts, schedule, asOf, units, cuts = NO_CUTS, business = false }: { accounts: Account[]; schedule: ScheduleEvent[]; asOf: string; units: "dollars" | "days"; cuts?: Record<string, number>; business?: boolean }) {
   const budgeted = Object.keys(cuts).length > 0;
   const h = useMemo(() => {
     const base = runForecast(accounts, schedule, asOf, { cuts });
@@ -38,7 +40,8 @@ export default function Health({ accounts, schedule, asOf, units, cuts = NO_CUTS
   const m = base.monthly;
   const checking = accounts.find((a) => a.id === base.checkingId);
   const negDays = base.firstNegative ? daysBetween(asOf, base.firstNegative.date) : null;
-  const s1: Status = negDays !== null && negDays <= 60 ? "bad" : lowSoon.balance < 500 ? "warn" : "good";
+  const warnAt = business ? Math.max(500, m.spending * 0.1) : 500; // a business needs a bigger cushion
+  const s1: Status = negDays !== null && negDays <= 60 ? "bad" : lowSoon.balance < warnAt ? "warn" : "good";
   const s2: Status = m.shortfall < 0 ? "bad" : m.shortfall < 200 ? "warn" : "good";
   const net = m.savingsInterest - m.cardInterest;
   const s3: Status = net < -50 ? "bad" : net < 0 ? "warn" : "good";
@@ -54,14 +57,15 @@ export default function Health({ accounts, schedule, asOf, units, cuts = NO_CUTS
             ? `In ${negDays} days, without changes. It first dips to ${money(lowSoon.balance)} on ${day(lowSoon.date)}.`
             : `Stays positive all year. Lowest point: ${day(base.lowest.date)}.`}
         </p>
-        <p className={styles.healthFoot}>Uses the paychecks and bills from your history, day by day.</p>
+        <p className={styles.healthFoot}>{business ? "Uses the company's deposits, payroll and bills, day by day." : "Uses the paychecks and bills from your history, day by day."}</p>
       </article>
 
       <article className={`${styles.panel} ${styles.healthCard} ${styles[`h_${s2}`]}`}>
         <p className={styles.healthLabel}><Dot s={s2} /> Monthly {m.shortfall < 0 ? "shortfall" : "surplus"}</p>
         <p className={styles.healthValue}>{m.shortfall < 0 ? "−" : "+"}{money(Math.abs(m.shortfall), false)}<small> / month</small></p>
         <p className={styles.healthSub}>
-          A typical month{budgeted ? " with your budgets from Edit" : ", averaged over your last 3"}: income {money(m.income, false)} vs. spending {money(m.spending, false)}, loans {money(m.loanPayments, false)} and card interest {money(m.cardInterest, false)}.
+          A typical month{budgeted ? " with your budgets from Edit" : business ? ", from recent Nessie activity" : ", averaged over your last 3"}: income {money(m.income, false)} vs. spending {money(m.spending, false)}
+          {m.cardInterest > 0 ? <>, loans {money(m.loanPayments, false)} and card interest {money(m.cardInterest, false)}.</> : <> and loan payments {money(m.loanPayments, false)}.</>}
         </p>
         <p className={styles.healthFoot}>
           {lasts === null
@@ -72,6 +76,7 @@ export default function Health({ accounts, schedule, asOf, units, cuts = NO_CUTS
         </p>
       </article>
 
+      {business ? <PayrollCard accounts={accounts} schedule={schedule} liquid={base.liquidNow} cuts={cuts} /> : (
       <article className={`${styles.panel} ${styles.healthCard} ${styles[`h_${s3}`]}`}>
         <p className={styles.healthLabel}><Dot s={s3} /> Interest</p>
         <p className={styles.healthValue}>{net < 0 ? "−" : "+"}{money(Math.abs(net), false)}<small> / month</small></p>
@@ -82,10 +87,34 @@ export default function Health({ accounts, schedule, asOf, units, cuts = NO_CUTS
             : "No card balance is costing you more than your savings earn."}
         </p>
       </article>
+      )}
     </section>
   );
 }
 
 function Dot({ s }: { s: Status }) {
   return <span className={`${styles.dot} ${styles[`dot_${s}`]}`} aria-label={s === "bad" ? "Needs attention" : s === "warn" ? "Watch" : "Healthy"} role="img" />;
+}
+
+// Company only: how many months of payroll the cash covers, and how much of the card limits is in use.
+function PayrollCard({ accounts, schedule, liquid, cuts }: { accounts: Account[]; schedule: ScheduleEvent[]; liquid: number; cuts: Record<string, number> }) {
+  const payroll = schedule.filter((e) => e.category === "payroll" && e.flow === "expense").reduce((t, e) => t + Math.abs(e.delta), 0) - (cuts.payroll ?? 0);
+  const months = payroll > 0 ? liquid / payroll : null;
+  const s: Status = months === null ? "good" : months < 2 ? "bad" : months < 4 ? "warn" : "good";
+  const cards = accounts.filter((a) => a.kind === "credit" && a.limit);
+  const used = cards.reduce((t, a) => t + Math.max(0, a.balance), 0);
+  const limit = cards.reduce((t, a) => t + (a.limit ?? 0), 0);
+  const util = limit ? Math.round((used / limit) * 100) : null;
+  return (
+    <article className={`${styles.panel} ${styles.healthCard} ${styles[`h_${s}`]}`}>
+      <p className={styles.healthLabel}><Dot s={s} /> Payroll coverage</p>
+      <p className={styles.healthValue}>{months === null ? "No payroll" : <>{months >= 100 ? "100+" : Math.round(months * 10) / 10}<small> months</small></>}</p>
+      <p className={styles.healthSub}>
+        {months === null ? "No payroll runs in the company's recent activity." : `Payroll runs about ${money(payroll, false)} a month. Cash and savings (${money(liquid, false)}) cover it for that long.`}
+      </p>
+      <p className={styles.healthFoot}>
+        {util === null ? "No business cards with a known limit." : `Business cards are using ${util}% of their ${money(limit, false)} in limits${util > 30 ? ". Paying them down frees up credit" : ""}.`}
+      </p>
+    </article>
+  );
 }

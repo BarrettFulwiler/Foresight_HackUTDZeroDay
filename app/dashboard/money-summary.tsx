@@ -20,10 +20,13 @@ const CAPTION: Record<AccountKind, string> = {
 };
 
 function cardDetail(a: Account) {
-  if (a.kind === "credit") return `${a.apr}% APR · min ${money(a.monthlyPayment)}`;
-  if (a.kind === "loan") return `${a.apr}% APR · ${money(a.monthlyPayment)}/mo`;
+  if (a.kind === "credit") {
+    if (a.apr) return `${a.apr}% APR · min ${money(a.monthlyPayment)}`;
+    return a.limit ? `${Math.round((a.balance / a.limit) * 100)}% of ${money(a.limit, false)} limit` : "Credit card";
+  }
+  if (a.kind === "loan") return a.apr ? `${a.apr}% APR · ${money(a.monthlyPayment)}/mo` : `${money(a.monthlyPayment, false)} a month`;
   if (a.yieldPct) return `${a.yieldPct}% yield`;
-  return "Everyday spending";
+  return a.type === "savings" ? "Savings" : "Everyday spending";
 }
 
 const KIND_COLOR: Record<AccountKind, string> = { cash: "#16a34a", investment: "#3b82f6", credit: "#f97316", loan: "#dc2626" };
@@ -69,7 +72,7 @@ function HaveOwe({ accounts, owned, owed }: { accounts: Account[]; owned: number
   );
 }
 
-export default function MoneySummary({ accounts, source, layout = "cards" }: { accounts: Account[]; source: "nessie" | "demo"; layout?: Display["accounts"] }) {
+export default function MoneySummary({ accounts, source, layout = "cards", business = false }: { accounts: Account[]; source: "nessie" | "demo"; layout?: Display["accounts"]; business?: boolean }) {
   const rail = useRef<HTMLDivElement>(null);
   const total = (kind: AccountKind) => accounts.filter((a) => a.kind === kind).reduce((s, a) => s + a.balance, 0);
   const owned = total("cash") + total("investment");
@@ -84,8 +87,9 @@ export default function MoneySummary({ accounts, source, layout = "cards" }: { a
         <div>
           <h2 id="summary-title" className={styles.cardTitle}>Money summary</h2>
           <p className={styles.cardSub}>
-            {accounts.length} accounts at 2 banks ·{" "}
-            {source === "nessie" ? `${accounts.filter((a) => a.live).length} with live balances from Nessie` : "Nessie unavailable, showing demo balances"}
+            {business
+              ? `${accounts.filter((a) => a.kind !== "loan").length} business accounts and ${accounts.filter((a) => a.kind === "loan").length} loans · live from Nessie`
+              : <>{accounts.length} accounts at 2 banks · {source === "nessie" ? `${accounts.filter((a) => a.live).length} with live balances from Nessie` : "Nessie unavailable, showing demo balances"}</>}
           </p>
         </div>
         {layout === "cards" && (

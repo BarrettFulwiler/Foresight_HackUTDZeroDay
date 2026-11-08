@@ -7,6 +7,7 @@ import { categoryMeta, longMonth, money } from "../../lib/format";
 import { shortDay } from "../../lib/plans";
 import { goalOption, type Prefs, monthsUntil, usePrefs } from "../../lib/prefs";
 import { DISPLAY_CARDS, type Display, useDisplay } from "../../lib/display";
+import type { CompanyInfo } from "../../lib/company-dashboard";
 import { type Summary, summarize } from "../../lib/summary";
 import SpendingDonut from "./spending-donut";
 import SavingsChart from "./savings-chart";
@@ -36,12 +37,16 @@ const POLL_MS = 5000;
 const GIVE_UP_MS = 3 * 60 * 1000;
 const BUDGETS_KEY = "foresight.budgets";
 
-export default function Dashboard({ data, source: initialSource, sourceError }: { data: DashboardData; source: Source; sourceError?: string }) {
+// company: set on /dashboard/company. The same dashboard then runs on that company's Nessie data (lib/company-dashboard.ts).
+export default function Dashboard({ data, source: initialSource, sourceError, company }: { data: DashboardData; source: Source; sourceError?: string; company?: CompanyInfo }) {
   const [tab, setTab] = useState<Tab>("View");
   const latest = data.months.at(-1)!;
   const { prefs, ready } = usePrefs();
   const { display, set: setDisplay, edited: displayEdited, reset: resetDisplay } = useDisplay(prefs);
   const [welcome, setWelcome] = useState(false);
+  // The saved goal belongs to whichever kind of account onboarding set up, so a personal goal never shows on a company.
+  const goal = prefs && prefs.goals.length > 0 && (prefs.accountType ?? "individual") === (company ? "company" : "individual") ? prefs.goal : undefined;
+  const budgetsKey = company ? "foresight.budgets.company" : BUDGETS_KEY;
 
   // One shared set of balances for every tab. Transfers update it, so View reflects Move right away.
   const [accounts, setAccounts] = useState<Account[]>(data.accounts);
@@ -55,26 +60,26 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(BUDGETS_KEY) ?? "{}");
+      const saved = JSON.parse(localStorage.getItem(budgetsKey) ?? "{}");
       if (saved && typeof saved === "object") setBudgets(Object.fromEntries(Object.entries(saved).filter(([k, v]) => k in typical && typeof v === "number" && v >= 0)) as Record<string, number>);
     } catch {}
-  }, [typical]);
+  }, [typical, budgetsKey]);
   const updateBudgets = (next: Record<string, number>) => {
     setBudgets(next);
     try {
-      localStorage.setItem(BUDGETS_KEY, JSON.stringify(next));
+      localStorage.setItem(budgetsKey, JSON.stringify(next));
     } catch {}
   };
   const monthlyBudget = useMemo(() => ({ ...typical, ...budgets }), [typical, budgets]);
   const cuts = useMemo(() => Object.fromEntries(Object.entries(budgets).filter(([k]) => k in typical).map(([k, v]) => [k, typical[k] - v])), [budgets, typical]);
 
   const refreshAccounts = useCallback(async () => {
-    const res = await fetch("/api/nessie/accounts", { cache: "no-store" });
+    const res = await fetch(company ? `/api/company/accounts?id=${encodeURIComponent(company.id)}` : "/api/nessie/accounts", { cache: "no-store" });
     const body = (await res.json()) as { accounts: Account[]; source: Source };
     setAccounts(body.accounts);
     setSource(body.source);
     return body.accounts;
-  }, []);
+  }, [company]);
 
   const balanceOf = (list: Account[], nessieId: string) => list.find((a) => a.nessieId === nessieId)?.balance ?? 0;
 
@@ -85,7 +90,7 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
     setReceipts((r) => [receipt, ...r]);
     const update = (patch: Partial<Receipt>) => setReceipts((r) => r.map((x) => (x.requestId === requestId ? { ...x, ...patch } : x)));
     try {
-      const res = await fetch("/api/nessie/transfers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fromId, toId, amount, requestId }) });
+      const res = await fetch("/api/nessie/transfers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fromId, toId, amount, requestId, companyId: company?.id }) });
       const body = await res.json();
       if (!res.ok) update({ status: "failed", error: body.error || "Transfer failed" });
       else {
@@ -133,39 +138,56 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
     }
   }, []);
 
+  const who = company
+    ? { title: company.name, sub: `${company.industry} · ${company.city} · live from Nessie`, initial: company.name.slice(0, 1).toUpperCase() }
+    : {
+        title: `Welcome back${prefs?.name ? `, ${prefs.name}` : ""}`,
+        sub: `Synthetic profile ${data.customerId} · as of ${data.asOf}`,
+        initial: (prefs?.name || data.customerId).slice(0, 1).toUpperCase(),
+      };
+  const estimated = "Before this month, history is estimated from the company's recent Nessie activity.";
+
   return (
     <main className={styles.page}>
-      <header className={styles.top}>
-        <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
-        <div className={styles.profile}>
-          <div>
-            <p className={styles.hello}>Welcome back{prefs?.name ? `, ${prefs.name}` : ""}</p>
-            <p className={styles.profileSub}>Synthetic profile {data.customerId} · as of {data.asOf}</p>
+      {/* One slim slate bar: logo, tabs, profile. The active tab gets a thin blue underline. */}
+      <header className={styles.navBar}>
+        <div className={styles.navInner}>
+          <a className={styles.navBrand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
+          <nav className={styles.navTabs} role="tablist" aria-label="Dashboard">
+            {TABS.map((t) => (
+              <button key={t} type="button" role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls={`panel-${t}`} className={tab === t ? styles.navTabOn : styles.navTab} onClick={() => setTab(t)}>
+                {t}
+              </button>
+            ))}
+          </nav>
+          <div className={styles.navProfile}>
+            <div>
+              <p className={styles.navHello}>{who.title}</p>
+              <p className={styles.navSub}>{who.sub}</p>
+            </div>
+            <a className={styles.avatar} href="/onboarding" title="Change your setup" aria-label="Change your setup">{who.initial}</a>
           </div>
-          <a className={styles.avatar} href="/onboarding" title="Change your setup" aria-label="Change your setup">{(prefs?.name || data.customerId).slice(0, 1).toUpperCase()}</a>
         </div>
       </header>
-
-      <nav className={styles.tabs} role="tablist" aria-label="Dashboard">
-        {TABS.map((t) => (
-          <button key={t} type="button" role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls={`panel-${t}`} className={tab === t ? styles.tabOn : styles.tab} onClick={() => setTab(t)}>
-            {t}
-          </button>
-        ))}
-      </nav>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className={styles.body}>
         {tab === "View" && (
           <>
-            {welcome && prefs && <Welcome prefs={prefs} onClose={() => setWelcome(false)} />}
-            <Highlights prefs={prefs} ready={ready} sum={sum} display={display} />
+            {welcome && prefs && !company && <Welcome prefs={prefs} onClose={() => setWelcome(false)} />}
+            {company && (
+              <p className={styles.companyStrip}>
+                {company.industry} · {company.city} · one of {company.pool} companies in Nessie
+                <a href="/dashboard/company">Show another company</a>
+              </p>
+            )}
+            <Highlights goal={goal} ready={ready} sum={sum} display={display} where={company ? `across ${accounts.filter((a) => a.kind === "cash").length} business accounts` : "across PNC and Capital One"} />
             <div className={styles.row}>
-              <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={display.spendingMonths} layout={display.spending} budget={monthlyBudget} custom={Object.keys(budgets)} /></section>
-              <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} layout={display.history} /></section>
+              <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={display.spendingMonths} layout={display.spending} budget={monthlyBudget} custom={Object.keys(budgets)} note={company ? estimated : undefined} /></section>
+              <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} layout={display.history} scope={company ? "All business checking and savings" : undefined} note={company ? estimated : undefined} /></section>
             </div>
-            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={display.cash} cuts={cuts} />
+            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={display.cash} cuts={cuts} business={Boolean(company)} />
             <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} layout={display.budget} />
-            <MoneySummary accounts={accounts} source={source} layout={display.accounts} />
+            <MoneySummary accounts={accounts} source={source} layout={display.accounts} business={Boolean(company)} />
           </>
         )}
         {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} />}
@@ -180,7 +202,8 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
             accounts={accounts}
             schedule={data.schedule}
             asOf={data.asOf}
-            goal={prefs && prefs.goals.length ? prefs.goal : undefined}
+            goal={goal}
+            companyId={company?.id}
             live={source === "nessie"}
             receipts={receipts}
             onTransfer={sendTransfer}
@@ -214,7 +237,7 @@ function Welcome({ prefs, onClose }: { prefs: Prefs; onClose: () => void }) {
   );
 }
 
-function Highlights({ prefs, ready, sum, display }: { prefs: Prefs | null; ready: boolean; sum: Summary; display: Display }) {
+function Highlights({ goal, ready, sum, display, where }: { goal?: Prefs["goal"]; ready: boolean; sum: Summary; display: Display; where: string }) {
   const days = display.cash === "days";
   return (
     <div className={styles.highlights}>
@@ -223,12 +246,12 @@ function Highlights({ prefs, ready, sum, display }: { prefs: Prefs | null; ready
         <p className={styles.cashValue}>{days ? `${sum.runwayDays} days` : money(sum.liquid, false)}</p>
         <p className={styles.cashSub}>
           {days
-            ? `of spending at ${money(sum.monthlyOut, false)} a month · ${money(sum.liquid, false)} across PNC and Capital One`
-            : `Across PNC and Capital One · about ${sum.runwayDays} days of spending`}
+            ? `of spending at ${money(sum.monthlyOut, false)} a month · ${money(sum.liquid, false)} ${where}`
+            : `${where[0].toUpperCase()}${where.slice(1)} · about ${sum.runwayDays} days of spending`}
         </p>
       </section>
-      {prefs && prefs.goals.length > 0 ? (
-        <GoalCard goal={prefs.goal} asOf={sum.asOf} style={display.goal} />
+      {goal ? (
+        <GoalCard goal={goal} asOf={sum.asOf} style={display.goal} />
       ) : ready ? (
         <section className={`${styles.panel} ${styles.setupCard}`}>
           <h2 className={styles.cardTitle}>Make it yours</h2>
@@ -411,7 +434,7 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
 }) {
   const linked = accounts.filter((a) => a.nessieId);
   const sources = linked.filter((a) => a.kind === "cash");
-  const [from, setFrom] = useState(sources.find((a) => a.bank === "Capital One" && a.type === "savings")?.nessieId ?? sources[0]?.nessieId ?? "");
+  const [from, setFrom] = useState(sources.find((a) => a.bank === "Capital One" && a.type === "savings")?.nessieId ?? sources.find((a) => a.type === "savings")?.nessieId ?? sources[0]?.nessieId ?? "");
   const [to, setTo] = useState(linked.find((a) => a.bank === "PNC" && a.type === "checking")?.nessieId ?? "");
   const [amount, setAmount] = useState("300");
   const [busy, setBusy] = useState(false);

@@ -17,6 +17,7 @@ export type Account = {
   monthlyPayment: number;
   apr: number;
   yieldPct: number;
+  limit?: number; // a card's credit limit, when known (company cards from Nessie)
   // Set when this account's balance comes live from Nessie (see lib/live-accounts.ts).
   nessieId?: string;
   live?: boolean;

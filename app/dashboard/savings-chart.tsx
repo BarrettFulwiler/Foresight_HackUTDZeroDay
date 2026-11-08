@@ -163,7 +163,14 @@ function ChangeBars({ pts, hover, onHover }: { pts: Point[]; hover: number | nul
   );
 }
 
-export default function SavingsChart({ points, topUps, layout = "chart" }: { points: Point[]; topUps?: { total: number; count: number }; layout?: Display["history"] }) {
+// scope: what the balance covers (the company dashboard passes its own); note: shown under the chart.
+export default function SavingsChart({ points, topUps, layout = "chart", scope = "PNC checking, savings, CD and IRA", note }: {
+  points: Point[];
+  topUps?: { total: number; count: number };
+  layout?: Display["history"];
+  scope?: string;
+  note?: string;
+}) {
   const [range, setRange] = useState<Range>("1Y");
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -191,7 +198,7 @@ export default function SavingsChart({ points, topUps, layout = "chart" }: { poi
   const labelEvery = Math.ceil(pts.length / 6);
 
   const facts = [
-    `The chart shows PNC checking, savings, CD and IRA balances combined, over the last ${range === "6M" ? "6 months" : range === "1Y" ? "12 months" : "24 months"}.`,
+    `The chart shows ${scope} balances combined, over the last ${range === "6M" ? "6 months" : range === "1Y" ? "12 months" : "24 months"}.`,
     `The balance in ${longMonth(pts.at(-1)!.month)} is ${money(pts.at(-1)!.value, false)}.`,
     `In ${longMonth(pts[0].month)} it was ${money(pts[0].value, false)}.`,
     `That is a ${change >= 0 ? "gain" : "drop"} of ${money(Math.abs(change), false)}.`,
@@ -213,7 +220,7 @@ export default function SavingsChart({ points, topUps, layout = "chart" }: { poi
       <div className={styles.cardHead}>
         <div>
           <h2 className={styles.cardTitle}>Account history</h2>
-          <p className={styles.cardSub}>PNC checking, savings, CD and IRA · {longMonth(current.month)}</p>
+          <p className={styles.cardSub}>{scope} · {longMonth(current.month)}</p>
         </div>
         <div className={styles.segmented} role="group" aria-label="Time range">
           {(Object.keys(RANGES) as Range[]).map((r) => (
@@ -291,6 +298,7 @@ export default function SavingsChart({ points, topUps, layout = "chart" }: { poi
       </svg>
       )}
       <GeminiFeedback facts={facts} />
+      {note && <p className={styles.chartNote}>{note}</p>}
       {topUps && topUps.total > 0 && (
         <p className={styles.chartNote}>
           This history includes {money(topUps.total, false)} moved in from an outside account ({topUps.count} deposits) in PNC&rsquo;s

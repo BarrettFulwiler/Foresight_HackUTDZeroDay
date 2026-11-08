@@ -5,9 +5,10 @@
   --bg: #f7f6f2;
   --card: #ffffff;
   --line: #e4e2da;
-  --accent: #3b5bfd;
+  --accent: #1a66ad; /* bank blue */
+  --accent-dark: #134f87;
   --accent-ink: #1e2f9e;
-  --violet: #8b5cf6;
+  --teal: #0f7c80; /* future-you and Gemini (was purple) */
   --blue: #0a84ff;
   --grey: #e9e9eb;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -60,8 +61,8 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: conic-gradient(from 200deg, var(--accent), var(--violet), var(--accent));
-  box-shadow: 0 0 0 4px #3b5bfd1f;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px #1a66ad1f;
 }
 
 .navLinks {
@@ -119,10 +120,7 @@
   line-height: 0.98;
   letter-spacing: -0.045em;
   margin: 0 0 22px;
-  background: linear-gradient(100deg, var(--ink) 30%, var(--accent) 75%, var(--violet));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--ink);
 }
 
 .lead {
@@ -217,7 +215,7 @@
   color: #fff;
   font-weight: 700;
   font-size: 18px;
-  background: linear-gradient(135deg, var(--accent), var(--violet));
+  background: var(--teal);
 }
 
 .contact {
@@ -404,7 +402,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: #3b5bfd14;
+  background: #1a66ad14;
   color: var(--accent);
   font-weight: 750;
 }
@@ -751,7 +749,7 @@
 
 .fApply {
   color: #fff;
-  background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  background: var(--accent);
   animation: fGone 0.3s ease-in 3.6s forwards;
 }
 
@@ -918,20 +916,20 @@
 }
 
 .primary {
-  background: #1d4ed8; /* white text ≈ 6.7:1 */
-  box-shadow: 0 8px 24px #1d4ed840;
+  background: #1a66ad; /* white text ≈ 6.7:1 */
+  box-shadow: 0 8px 24px #1a66ad40;
 }
 
 .primary:hover {
-  background: #1e40af;
+  background: #134f87;
 }
 
 .navLinks .navCta {
-  background: #1d4ed8;
+  background: #1a66ad;
 }
 
 .navLinks .navCta:hover {
-  background: #1e40af;
+  background: #134f87;
 }
 
 .fAxis {
@@ -988,7 +986,7 @@
 }
 
 .fMark {
-  stroke: #7c3aed;
+  stroke: var(--teal);
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
@@ -996,7 +994,7 @@
 .fMarkLabel {
   font-size: 11px;
   font-weight: 700;
-  fill: #6d28d9;
+  fill: var(--teal);
 }
 
 .fFix {
@@ -1040,7 +1038,7 @@
   margin: 0;
   padding: 10px 14px;
   border-radius: 18px 18px 6px 18px;
-  background: #1d4ed8;
+  background: #1a66ad;
   color: #fff;
   font-size: 15px;
   line-height: 1.4;
