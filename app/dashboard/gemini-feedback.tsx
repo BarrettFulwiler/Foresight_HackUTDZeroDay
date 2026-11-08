@@ -68,12 +68,14 @@ export default function GeminiFeedback({ facts, topic, label, placeholder = "Ask
     return () => clearInterval(id);
   }, [text]);
 
+  const trimmed = question.trim();
+
   async function ask(e: React.FormEvent) {
     e.preventDefault();
-    if (reply.status === "loading") return;
+    if (!trimmed || reply.status === "loading") return; // nothing typed: don't ask Gemini
     setReply({ status: "loading" });
     try {
-      const res = await fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, facts, topic }) });
+      const res = await fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: trimmed, facts, topic }) });
       const data = await res.json().catch(() => ({}));
       setReply(res.ok ? { status: "done", ...data } : { status: "error", error: data.error ?? "Gemini didn't answer. Try again." });
     } catch {
@@ -93,7 +95,13 @@ export default function GeminiFeedback({ facts, topic, label, placeholder = "Ask
           aria-label={label}
           maxLength={300}
         />
-        <button type="submit" className={styles.gemBtn} disabled={reply.status === "loading"} aria-label="Ask Gemini">
+        <button
+          type="submit"
+          className={styles.gemBtn}
+          disabled={!trimmed || reply.status === "loading"}
+          aria-label="Ask Gemini"
+          title={trimmed ? "Ask Gemini" : "Type a question first"}
+        >
           <GeminiMark />
         </button>
       </form>

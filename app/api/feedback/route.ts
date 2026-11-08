@@ -1,4 +1,4 @@
-// POST { question?: string, facts: string[], topic?: "history" | "spending" } → { text, checked, model }: Gemini's
+// POST { question: string, facts: string[], topic?: "history" | "spending" } → { text, checked, model }: Gemini's
 // feedback on a dashboard card (Account history or Spending), written only from the facts the card sends.
 // Every number in the reply must already be in the facts (or the question).
 import { NextResponse } from "next/server";
@@ -45,8 +45,10 @@ export async function POST(req: Request) {
   if (!Array.isArray(facts) || facts.length === 0 || facts.length > 20 || !facts.every((f) => typeof f === "string" && f.length <= 500)) {
     return NextResponse.json({ error: "Send the card's facts as a list of sentences." }, { status: 400 });
   }
+  // Gemini only answers when the person actually asked something.
+  if (!question) return NextResponse.json({ error: "Type a question first." }, { status: 400 });
   const allowed = [...facts, question];
-  const input = `Facts:\n${facts.map((f) => `- ${f}`).join("\n")}\n\nTheir question: ${question || "(none. Just give feedback.)"}`;
+  const input = `Facts:\n${facts.map((f) => `- ${f}`).join("\n")}\n\nTheir question: ${question}`;
   try {
     let feedback = "";
     for (let attempt = 0; attempt < 2; attempt++) {
