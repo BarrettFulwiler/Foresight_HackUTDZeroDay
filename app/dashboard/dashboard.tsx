@@ -6,16 +6,19 @@ import { SignOutButton } from "@clerk/nextjs";
 import { categoryTotals, monthlyTotals, runForecast, type Forecast } from "../../lib/forecast";
 import { categoryMeta, longMonth, money } from "../../lib/format";
 import { shortDay } from "../../lib/plans";
-import { GOAL_OPTIONS, type Prefs, monthsUntil, usePrefs } from "../../lib/prefs";
+import { goalOption, type Prefs, monthsUntil, usePrefs } from "../../lib/prefs";
+import { DISPLAY_CARDS, VIEW_CARDS, type Display, type ViewCardId, useDisplay } from "../../lib/display";
+import type { CompanyInfo } from "../../lib/company-dashboard";
 import { type Summary, summarize } from "../../lib/summary";
 import SpendingDonut from "./spending-donut";
 import SavingsChart from "./savings-chart";
 import MoneySummary from "./money-summary";
 import Health from "./health";
 import Advising from "./advising";
+import CreditScore from "./credit-score";
 import styles from "./dashboard.module.css";
 
-const TABS = ["View", "Move", "Edit", "Advising"] as const;
+const TABS = ["View", "Edit", "Move", "Advising"] as const;
 type Tab = (typeof TABS)[number];
 
 type Source = "nessie" | "demo";
@@ -36,11 +39,16 @@ const POLL_MS = 5000;
 const GIVE_UP_MS = 3 * 60 * 1000;
 const BUDGETS_KEY = "foresight.budgets";
 
-export default function Dashboard({ data, source: initialSource, sourceError, member }: { data: DashboardData; source: Source; sourceError?: string; member?: { name: string; type: "individual" | "company" } }) {
+// company: set on /dashboard/company. The same dashboard then runs on that company's Nessie data (lib/company-dashboard.ts).
+export default function Dashboard({ data, source: initialSource, sourceError, company }: { data: DashboardData; source: Source; sourceError?: string; company?: CompanyInfo }) {
   const [tab, setTab] = useState<Tab>("View");
   const latest = data.months.at(-1)!;
   const { prefs, ready } = usePrefs();
+  const { display, set: setDisplay, edited: displayEdited, reset: resetDisplay, hidden, toggleHidden, showAll } = useDisplay(prefs);
   const [welcome, setWelcome] = useState(false);
+  // The saved goal belongs to whichever kind of account onboarding set up, so a personal goal never shows on a company.
+  const goal = prefs && prefs.goals.length > 0 && (prefs.accountType ?? "individual") === (company ? "company" : "individual") ? prefs.goal : undefined;
+  const budgetsKey = company ? "foresight.budgets.company" : BUDGETS_KEY;
 
   // One shared set of balances for every tab. Transfers update it, so View reflects Move right away.
   const [accounts, setAccounts] = useState<Account[]>(data.accounts);
@@ -54,25 +62,26 @@ export default function Dashboard({ data, source: initialSource, sourceError, me
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(BUDGETS_KEY) ?? "{}");
+      const saved = JSON.parse(localStorage.getItem(budgetsKey) ?? "{}");
       if (saved && typeof saved === "object") setBudgets(Object.fromEntries(Object.entries(saved).filter(([k, v]) => k in typical && typeof v === "number" && v >= 0)) as Record<string, number>);
     } catch {}
-  }, [typical]);
+  }, [typical, budgetsKey]);
   const updateBudgets = (next: Record<string, number>) => {
     setBudgets(next);
     try {
-      localStorage.setItem(BUDGETS_KEY, JSON.stringify(next));
+      localStorage.setItem(budgetsKey, JSON.stringify(next));
     } catch {}
   };
+  const monthlyBudget = useMemo(() => ({ ...typical, ...budgets }), [typical, budgets]);
   const cuts = useMemo(() => Object.fromEntries(Object.entries(budgets).filter(([k]) => k in typical).map(([k, v]) => [k, typical[k] - v])), [budgets, typical]);
 
   const refreshAccounts = useCallback(async () => {
-    const res = await fetch("/api/nessie/accounts", { cache: "no-store" });
+    const res = await fetch(company ? `/api/company/accounts?id=${encodeURIComponent(company.id)}` : "/api/nessie/accounts", { cache: "no-store" });
     const body = (await res.json()) as { accounts: Account[]; source: Source };
     setAccounts(body.accounts);
     setSource(body.source);
     return body.accounts;
-  }, []);
+  }, [company]);
 
   const balanceOf = (list: Account[], nessieId: string) => list.find((a) => a.nessieId === nessieId)?.balance ?? 0;
 
@@ -83,7 +92,7 @@ export default function Dashboard({ data, source: initialSource, sourceError, me
     setReceipts((r) => [receipt, ...r]);
     const update = (patch: Partial<Receipt>) => setReceipts((r) => r.map((x) => (x.requestId === requestId ? { ...x, ...patch } : x)));
     try {
-      const res = await fetch("/api/nessie/transfers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fromId, toId, amount, requestId }) });
+      const res = await fetch("/api/nessie/transfers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fromId, toId, amount, requestId, companyId: company?.id }) });
       const body = await res.json();
       if (!res.ok) update({ status: "failed", error: body.error || "Transfer failed" });
       else {
@@ -131,60 +140,88 @@ export default function Dashboard({ data, source: initialSource, sourceError, me
     }
   }, []);
 
+  const who = company
+    ? { title: company.name, sub: `${company.industry} · ${company.city} · live from Nessie`, initial: company.name.slice(0, 1).toUpperCase() }
+    : {
+        title: `Welcome back${prefs?.name ? `, ${prefs.name}` : ""}`,
+        sub: `Synthetic profile ${data.customerId} · as of ${data.asOf}`,
+        initial: (prefs?.name || data.customerId).slice(0, 1).toUpperCase(),
+      };
+  const estimated = "Before this month, history is estimated from the company's recent Nessie activity.";
+  // Cards this dashboard has (the credit score is personal only), minus the ones hidden on the Edit tab.
+  const viewCards = VIEW_CARDS.filter((c) => !(company && c.personalOnly));
+  const shown = (id: ViewCardId) => viewCards.some((c) => c.id === id) && !hidden.includes(id);
+
   return (
     <main className={styles.page}>
-      <header className={styles.top}>
-        <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
-        <div className={styles.profile}>
-          <div>
-            <p className={styles.hello}>Welcome back{member ? `, ${member.name.split(" ")[0]}` : prefs?.name ? `, ${prefs.name}` : ""}</p>
-            <p className={styles.profileSub}>
-              {member ? `Signed in · ${member.type === "company" ? "Company" : "Individual"} · ` : ""}Synthetic profile {data.customerId} · as of {data.asOf}
-            </p>
+      {/* One slim slate bar: logo, tabs, profile. The active tab gets a thin blue underline. */}
+      <header className={styles.navBar}>
+        <div className={styles.navInner}>
+          <a className={styles.navBrand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
+          <nav className={styles.navTabs} role="tablist" aria-label="Dashboard">
+            {TABS.map((t) => (
+              <button key={t} type="button" role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls={`panel-${t}`} className={tab === t ? styles.navTabOn : styles.navTab} onClick={() => setTab(t)}>
+                {t}
+              </button>
+            ))}
+          </nav>
+          <div className={styles.navProfile}>
+            <div>
+              <p className={styles.navHello}>{who.title}</p>
+              <p className={styles.navSub}>{who.sub}</p>
+            </div>
+            <a className={styles.avatar} href="/onboarding" title="Change your setup" aria-label="Change your setup">{who.initial}</a>
           </div>
-          <a className={styles.avatar} href="/onboarding" title="Change your setup" aria-label="Change your setup">{(member?.name || prefs?.name || data.customerId).slice(0, 1).toUpperCase()}</a>
-          {member ? (
-            <SignOutButton redirectUrl="/">
-              <button type="button" className={styles.signOut}>Sign out</button>
-            </SignOutButton>
-          ) : (
-            <a className={styles.signOut} href="/start?mode=signin">Sign in</a>
-          )}
         </div>
       </header>
-
-      <nav className={styles.tabs} role="tablist" aria-label="Dashboard">
-        {TABS.map((t) => (
-          <button key={t} type="button" role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls={`panel-${t}`} className={tab === t ? styles.tabOn : styles.tab} onClick={() => setTab(t)}>
-            {t}
-          </button>
-        ))}
-      </nav>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className={styles.body}>
         {tab === "View" && (
           <>
-            {welcome && prefs && <Welcome prefs={prefs} onClose={() => setWelcome(false)} />}
-            <Highlights prefs={prefs} ready={ready} sum={sum} />
-            <div className={styles.row}>
-              <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={prefs?.period ?? 3} /></section>
-              <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} /></section>
+            {welcome && prefs && !company && <Welcome prefs={prefs} onClose={() => setWelcome(false)} />}
+            {company && (
+              <p className={styles.companyStrip}>
+                {company.industry} · {company.city} · one of {company.pool} companies in Nessie
+                <a href="/dashboard/company">Show another company</a>
+              </p>
+            )}
+            {viewCards.every((c) => hidden.includes(c.id)) && (
+              <section className={`${styles.panel} ${styles.allHidden}`}>
+                <h2 className={styles.cardTitle}>Every card is hidden</h2>
+                <p className={styles.cardSub}>Choose what to show on the Edit tab.</p>
+                <button type="button" className={styles.linkBtn} onClick={showAll}>Show all cards</button>
+              </section>
+            )}
+            {(shown("cash") || shown("goal")) && (
+              <Highlights goal={goal} ready={ready} sum={sum} display={display} showCash={shown("cash")} showGoal={shown("goal")} where={company ? `across ${accounts.filter((a) => a.kind === "cash").length} business accounts` : "across PNC and Capital One"} />
+            )}
+            {(shown("spending") || shown("history")) && (
+            <div className={shown("spending") && shown("history") ? styles.row : styles.rowSingle}>
+              {shown("spending") && <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={display.spendingMonths} layout={display.spending} budget={monthlyBudget} custom={Object.keys(budgets)} note={company ? estimated : undefined} business={Boolean(company)} /></section>}
+              {shown("history") && <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} layout={display.history} scope={company ? "All business checking and savings" : undefined} note={company ? estimated : undefined} /></section>}
             </div>
-            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={prefs?.units ?? "dollars"} cuts={cuts} />
-            <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} />
-            <MoneySummary accounts={accounts} source={source} />
+            )}
+            {shown("health") && <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={display.cash} cuts={cuts} business={Boolean(company)} />}
+            {shown("budget") && <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} layout={display.budget} />}
+            {shown("accounts") && <MoneySummary accounts={accounts} source={source} layout={display.accounts} business={Boolean(company)} />}
+            {shown("credit") && data.credit && <CreditScore accounts={accounts} credit={data.credit} asOf={data.asOf} layout={display.credit} />}
           </>
         )}
         {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} />}
         {tab === "Edit" && (
-          <EditBudgets typical={typical} budgets={budgets} onChange={updateBudgets} cuts={cuts} accounts={accounts} schedule={data.schedule} asOf={data.asOf} onOpen={setTab} />
+          <>
+            <EditVisibility cards={viewCards} hidden={hidden} onToggle={toggleHidden} onShowAll={showAll} onOpen={setTab} />
+            <EditDisplay display={display} onSet={setDisplay} edited={displayEdited} onReset={resetDisplay} onOpen={setTab} hidden={hidden} personal={!company} />
+            <EditBudgets typical={typical} budgets={budgets} onChange={updateBudgets} cuts={cuts} accounts={accounts} schedule={data.schedule} asOf={data.asOf} onOpen={setTab} />
+          </>
         )}
         {tab === "Advising" && (
           <Advising
             accounts={accounts}
             schedule={data.schedule}
             asOf={data.asOf}
-            goal={prefs && prefs.goals.length ? prefs.goal : undefined}
+            goal={goal}
+            companyId={company?.id}
             live={source === "nessie"}
             receipts={receipts}
             onTransfer={sendTransfer}
@@ -218,21 +255,23 @@ function Welcome({ prefs, onClose }: { prefs: Prefs; onClose: () => void }) {
   );
 }
 
-function Highlights({ prefs, ready, sum }: { prefs: Prefs | null; ready: boolean; sum: Summary }) {
-  const days = prefs?.units === "days";
+function Highlights({ goal, ready, sum, display, where, showCash, showGoal }: { goal?: Prefs["goal"]; ready: boolean; sum: Summary; display: Display; where: string; showCash: boolean; showGoal: boolean }) {
+  const days = display.cash === "days";
   return (
-    <div className={styles.highlights}>
+    <div className={showCash && showGoal ? styles.highlights : styles.rowSingle}>
+      {showCash && (
       <section className={`${styles.panel} ${styles.cashCard}`} aria-label="Cash">
         <p className={styles.cashLabel}>{days ? "Your cash covers" : "Cash and savings"}</p>
         <p className={styles.cashValue}>{days ? `${sum.runwayDays} days` : money(sum.liquid, false)}</p>
         <p className={styles.cashSub}>
           {days
-            ? `of spending at ${money(sum.monthlyOut, false)} a month · ${money(sum.liquid, false)} across PNC and Capital One`
-            : `Across PNC and Capital One · about ${sum.runwayDays} days of spending`}
+            ? `of spending at ${money(sum.monthlyOut, false)} a month · ${money(sum.liquid, false)} ${where}`
+            : `${where[0].toUpperCase()}${where.slice(1)} · about ${sum.runwayDays} days of spending`}
         </p>
       </section>
-      {prefs && prefs.goals.length > 0 ? (
-        <GoalCard goal={prefs.goal} asOf={sum.asOf} />
+      )}
+      {!showGoal ? null : goal ? (
+        <GoalCard goal={goal} asOf={sum.asOf} style={display.goal} />
       ) : ready ? (
         <section className={`${styles.panel} ${styles.setupCard}`}>
           <h2 className={styles.cardTitle}>Make it yours</h2>
@@ -246,8 +285,8 @@ function Highlights({ prefs, ready, sum }: { prefs: Prefs | null; ready: boolean
   );
 }
 
-function GoalCard({ goal, asOf }: { goal: Prefs["goal"]; asOf: string }) {
-  const meta = GOAL_OPTIONS.find((o) => o.kind === goal.kind);
+function GoalCard({ goal, asOf, style }: { goal: Prefs["goal"]; asOf: string; style: Display["goal"] }) {
+  const meta = goalOption(goal.kind);
   const pct = goal.target ? Math.min(100, (goal.saved / goal.target) * 100) : 0;
   const months = goal.by ? monthsUntil(asOf, goal.by) : 1;
   const perMonth = Math.max(0, goal.target - goal.saved) / months;
@@ -260,17 +299,102 @@ function GoalCard({ goal, asOf }: { goal: Prefs["goal"]; asOf: string }) {
         </div>
         <a className={styles.editLink} href="/onboarding">Edit</a>
       </div>
-      <p className={styles.goalNums}><strong>{money(goal.saved, false)}</strong> of {money(goal.target, false)}{goal.by ? ` by ${longMonth(goal.by)}` : ""}</p>
-      <div className={styles.meter} aria-label={`${pct.toFixed(0)}% funded`}><span style={{ width: `${pct}%` }} /></div>
-      <p className={styles.cardSub}>{pct.toFixed(0)}% funded · {money(perMonth, false)} a month for {months} month{months === 1 ? "" : "s"} keeps you on track</p>
+      {style === "ring" ? (
+        <div className={styles.goalRingRow}>
+          <ProgressRing pct={pct} />
+          <div>
+            <p className={styles.goalNums}><strong>{money(goal.saved, false)}</strong> of {money(goal.target, false)}</p>
+            <p className={styles.cardSub}>{goal.by ? `By ${longMonth(goal.by)} · ` : ""}{money(perMonth, false)} a month for {months} month{months === 1 ? "" : "s"} keeps you on track</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className={styles.goalNums}><strong>{money(goal.saved, false)}</strong> of {money(goal.target, false)}{goal.by ? ` by ${longMonth(goal.by)}` : ""}</p>
+          <div className={styles.meter} aria-label={`${pct.toFixed(0)}% funded`}><span style={{ width: `${pct}%` }} /></div>
+          <p className={styles.cardSub}>{pct.toFixed(0)}% funded · {money(perMonth, false)} a month for {months} month{months === 1 ? "" : "s"} keeps you on track</p>
+        </>
+      )}
     </section>
   );
 }
 
-function Budget({ income, spending, loans, month }: { income: number; spending: number; loans: number; month: string }) {
+// A percent-funded ring for the goal card (the "Ring" option on the Edit tab).
+function ProgressRing({ pct }: { pct: number }) {
+  const r = 34;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className={styles.ring} role="img" aria-label={`${pct.toFixed(0)}% funded`}>
+      <svg viewBox="0 0 84 84" aria-hidden="true">
+        <circle cx="42" cy="42" r={r} className={styles.ringTrack} />
+        <circle cx="42" cy="42" r={r} className={styles.ringFill} strokeDasharray={`${(pct / 100) * c} ${c}`} transform="rotate(-90 42 42)" />
+      </svg>
+      <span>{pct.toFixed(0)}%</span>
+    </div>
+  );
+}
+
+// Income steps down through spending and loan payments to what's left (red when it goes below zero).
+// Plain HTML rather than SVG, so the labels stay a readable size at any width.
+function Waterfall({ income, spending, loans }: { income: number; spending: number; loans: number }) {
+  const leftover = income - spending - loans;
+  // Y axis: round tick steps (1, 2, 2.5 or 5 × a power of ten), about 4 of them, and a range that ends on ticks.
+  const rawLo = Math.min(0, leftover);
+  const rawHi = Math.max(income, 0);
+  const rough = (rawHi - rawLo || 1) / 4;
+  const mag = 10 ** Math.floor(Math.log10(rough));
+  const tick = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((t) => t >= rough)!;
+  const lo = Math.floor(rawLo / tick) * tick;
+  const hi = Math.ceil(rawHi / tick) * tick;
+  const ticks = Array.from({ length: Math.round((hi - lo) / tick) + 1 }, (_, i) => hi - i * tick);
+  const y = (v: number) => 8 + ((hi - v) / (hi - lo || 1)) * 84; // % from the top, leaving room for value labels
+  const axisLabel = (v: number) => (v === 0 ? "$0" : `${v < 0 ? "-" : ""}$${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(tick < 1000 ? 1 : 0)}k` : Math.abs(v)}`);
+  const steps = [
+    { label: "Income", from: 0, to: income, value: income },
+    { label: "Spending", from: income, to: income - spending, value: -spending },
+    { label: "Loan payments", from: income - spending, to: leftover, value: -loans },
+    { label: "Leftover", from: 0, to: leftover, value: leftover },
+  ];
+  return (
+    <div
+      className={styles.wf}
+      role="img"
+      aria-label={`Income ${money(income)}, minus spending ${money(spending)}, minus loan payments ${money(loans)}, leaves ${leftover < 0 ? "-" : ""}${money(Math.abs(leftover))}`}
+    >
+      <div className={styles.wfChart}>
+      <div className={styles.wfAxis} aria-hidden="true">
+        {ticks.map((t) => <span key={t} style={{ top: `${y(t)}%` }}>{axisLabel(t)}</span>)}
+      </div>
+      <div className={styles.wfPlot}>
+        {ticks.filter((t) => t !== 0).map((t) => <span key={t} className={styles.wfGrid} style={{ top: `${y(t)}%` }} />)}
+        <span className={styles.wfZero} style={{ top: `${y(0)}%` }} />
+        {steps.map((st, i) => {
+          const top = y(Math.max(st.from, st.to));
+          const bottom = y(Math.min(st.from, st.to));
+          const down = st.value < 0;
+          return (
+            <div key={st.label} className={styles.wfCol}>
+              <span className={down ? styles.wfLoss : styles.wfGain} style={{ top: `${top}%`, height: `max(2px, ${bottom - top}%)` }} />
+              <span className={styles.wfValue} style={down ? { top: `calc(${bottom}% + 4px)` } : { bottom: `calc(${100 - top}% + 4px)` }}>
+                {down ? "-" : "+"}{money(Math.abs(st.value), false)}
+              </span>
+              {i < steps.length - 1 && <span className={styles.wfStep} style={{ top: `${y(st.to)}%` }} />}
+            </div>
+          );
+        })}
+      </div>
+      </div>
+      <div className={styles.wfLabels} aria-hidden="true">
+        {steps.map((st) => <span key={st.label}>{st.label}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function Budget({ income, spending, loans, month, layout }: { income: number; spending: number; loans: number; month: string; layout: Display["budget"] }) {
   const out = spending + loans;
   const leftover = income - out;
   const used = income ? Math.min(100, (out / income) * 100) : 100;
+  const share = (v: number) => (income ? `${((v / income) * 100).toFixed(1)}%` : "—");
   return (
     <section className={styles.panel} aria-labelledby="budget-title">
       <div className={styles.cardHead}>
@@ -279,6 +403,27 @@ function Budget({ income, spending, loans, month }: { income: number; spending: 
           <p className={styles.cardSub}>{longMonth(month)} · what actually happened (the Health row above uses a typical month)</p>
         </div>
       </div>
+      {layout === "waterfall" ? (
+        <Waterfall income={income} spending={spending} loans={loans} />
+      ) : layout === "table" ? (
+        <div className={styles.tableWrap}>
+          <table className={styles.dataTable}>
+            <caption className={styles.srOnly}>Budget for {longMonth(month)}</caption>
+            <thead>
+              <tr><th scope="col">Item</th><th scope="col" className={styles.num}>Amount</th><th scope="col" className={styles.num}>Share of income</th></tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">Income</th><td className={`${styles.num} ${styles.pos}`}>{money(income)}</td><td className={styles.num}>100%</td></tr>
+              <tr><th scope="row">Spending</th><td className={`${styles.num} ${styles.neg}`}>-{money(spending)}</td><td className={styles.num}>{share(spending)}</td></tr>
+              <tr><th scope="row">Loan payments</th><td className={`${styles.num} ${styles.neg}`}>-{money(loans)}</td><td className={styles.num}>{share(loans)}</td></tr>
+            </tbody>
+            <tfoot>
+              <tr><th scope="row">Leftover</th><td className={`${styles.num} ${leftover < 0 ? styles.neg : styles.pos}`}>{leftover < 0 ? "-" : ""}{money(Math.abs(leftover))}</td><td className={styles.num}>{share(leftover)}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      ) : (
+      <>
       <div className={styles.budgetRow}>
         <div className={`${styles.budgetBox} ${leftover < 0 ? styles.budgetBad : styles.budgetGood}`}>
           <span>Leftover</span>
@@ -294,6 +439,8 @@ function Budget({ income, spending, loans, month }: { income: number; spending: 
       <div className={styles.meter} aria-label={`${used.toFixed(0)}% of income used`}>
         <span style={{ width: `${used}%` }} className={leftover < 0 ? styles.meterOver : undefined} />
       </div>
+      </>
+      )}
     </section>
   );
 }
@@ -307,7 +454,7 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
 }) {
   const linked = accounts.filter((a) => a.nessieId);
   const sources = linked.filter((a) => a.kind === "cash");
-  const [from, setFrom] = useState(sources.find((a) => a.bank === "Capital One" && a.type === "savings")?.nessieId ?? sources[0]?.nessieId ?? "");
+  const [from, setFrom] = useState(sources.find((a) => a.bank === "Capital One" && a.type === "savings")?.nessieId ?? sources.find((a) => a.type === "savings")?.nessieId ?? sources[0]?.nessieId ?? "");
   const [to, setTo] = useState(linked.find((a) => a.bank === "PNC" && a.type === "checking")?.nessieId ?? "");
   const [amount, setAmount] = useState("300");
   const [busy, setBusy] = useState(false);
@@ -400,7 +547,93 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
   );
 }
 
-// The Edit tab: monthly budgets per category, starting from the forecast's typical month.
+// The Edit tab, part 1: how each View card presents its data (chart or table, and so on).
+// The Edit tab, part 0: which cards appear on View at all.
+function EditVisibility({ cards, hidden, onToggle, onShowAll, onOpen }: {
+  cards: typeof VIEW_CARDS;
+  hidden: ViewCardId[];
+  onToggle: (id: ViewCardId) => void;
+  onShowAll: () => void;
+  onOpen: (tab: Tab) => void;
+}) {
+  const count = cards.filter((c) => !hidden.includes(c.id)).length;
+  return (
+    <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="vis-title">
+      <h2 id="vis-title" className={styles.cardTitle}>Show on View</h2>
+      <p className={styles.cardSub}>Turn off any card you don&rsquo;t need. Showing {count} of {cards.length}. Saved on this device.</p>
+      <ul className={styles.visList}>
+        {cards.map((c) => {
+          const on = !hidden.includes(c.id);
+          return (
+            <li key={c.id}>
+              <label className={styles.visRow}>
+                <span className={styles.displayName}>
+                  <strong>{c.title}</strong>
+                  <span>{c.about}</span>
+                </span>
+                <input type="checkbox" role="switch" className={styles.switch} checked={on} aria-checked={on} onChange={() => onToggle(c.id)} />
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <div className={styles.editActions}>
+        <button type="button" className={styles.linkBtn} onClick={() => onOpen("View")}>See it on View →</button>
+        {hidden.some((id) => cards.some((c) => c.id === id)) && <button type="button" className={styles.linkBtn} onClick={onShowAll}>Show all cards</button>}
+      </div>
+    </section>
+  );
+}
+
+function EditDisplay({ display, onSet, edited, onReset, onOpen, hidden, personal }: {
+  display: Display;
+  onSet: <K extends keyof Display>(key: K, value: Display[K]) => void;
+  edited: boolean;
+  onReset: () => void;
+  onOpen: (tab: Tab) => void;
+  hidden: ViewCardId[];
+  personal: boolean;
+}) {
+  return (
+    <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="display-title">
+      <h2 id="display-title" className={styles.cardTitle}>Display</h2>
+      <p className={styles.cardSub}>Choose how each card on View shows your data. Changes apply right away and are saved on this device.</p>
+      <ul className={styles.displayList}>
+        {DISPLAY_CARDS.filter((card) => personal || !card.personalOnly).map((card) => (
+          <li key={card.id} className={hidden.includes(card.id as ViewCardId) ? styles.displayOff : undefined}>
+            <div className={styles.displayName}>
+              <strong>{card.title}{hidden.includes(card.id as ViewCardId) && <em className={styles.hiddenTag}>Hidden on View</em>}</strong>
+              <span>{card.about}</span>
+            </div>
+            <div className={styles.displayControls}>
+              {card.settings.map((s) => (
+                <div key={s.key} className={styles.displaySetting}>
+                  <span id={`d-${s.key}`}>{s.label}</span>
+                  <div className={styles.segmented} role="radiogroup" aria-labelledby={`d-${s.key}`}>
+                    {s.options.map((o) => {
+                      const on = display[s.key] === o.value;
+                      return (
+                        <button key={String(o.value)} type="button" role="radio" aria-checked={on} className={on ? styles.segOn : undefined} onClick={() => onSet(s.key, o.value as never)}>
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className={styles.editActions}>
+        <button type="button" className={styles.linkBtn} onClick={() => onOpen("View")}>See it on View →</button>
+        {edited && <button type="button" className={styles.linkBtn} onClick={onReset}>Reset to defaults</button>}
+      </div>
+    </section>
+  );
+}
+
+// The Edit tab, part 2: monthly budgets per category, starting from the forecast's typical month.
 // Changes feed the same forecast as View and Advising, so all three always agree.
 function EditBudgets({ typical, budgets, onChange, cuts, accounts, schedule, asOf, onOpen }: {
   typical: Record<string, number>;
