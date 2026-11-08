@@ -1214,22 +1214,24 @@
 }
 
 .healthCard {
+  --status: var(--line);
   display: grid;
-  align-content: start;
+  grid-template-rows: auto auto 1fr auto; /* label, value, detail, footer pinned to the bottom */
   gap: 6px;
-  border-top: 4px solid var(--line);
+  /* Status shown as a tinted outline that follows the rounded corners (plus the dot and value color). */
+  border: 1.5px solid color-mix(in srgb, var(--status) 45%, transparent);
 }
 
 .h_bad {
-  border-top-color: var(--neg);
+  --status: var(--neg);
 }
 
 .h_warn {
-  border-top-color: #f59e0b;
+  --status: #f59e0b;
 }
 
 .h_good {
-  border-top-color: var(--pos);
+  --status: var(--pos);
 }
 
 .healthLabel {
@@ -1264,6 +1266,7 @@
 
 .healthSub {
   margin: 0;
+  align-self: start;
   font-size: 14px;
   line-height: 1.45;
 }
@@ -1430,6 +1433,26 @@
   stroke: #ef4444;
   stroke-width: 1;
   stroke-dasharray: 4 4;
+}
+
+.axisZero {
+  font-size: 12px;
+  font-weight: 700;
+  fill: #dc2626;
+}
+
+.clipArrow {
+  fill: #dc2626;
+}
+
+.clipNote {
+  font-size: 12px;
+  font-weight: 700;
+  fill: #b91c1c;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 
 .lineAsIs,
@@ -2016,3 +2039,35 @@
   animation: gemBlink 0.9s steps(1) infinite;
 }
 @keyframes gemBlink { 50% { opacity: 0; } }
+/* Edit tab: budgets that feed the forecast */
+.editWas {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.editChanged {
+  border-color: var(--accent);
+  background: #eef2ff;
+}
+
+.editEffect {
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.editActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.totalsNote {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}

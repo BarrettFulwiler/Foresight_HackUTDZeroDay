@@ -98,6 +98,11 @@ export default function SpendingDonut({ months, txns, windowSize = 3 }: { months
         <div><dt>Income</dt><dd className={styles.pos}>{money(view.income)}</dd></div>
         <div><dt title="Income minus spending, before loan payments">Before loans</dt><dd className={view.income - view.spending >= 0 ? styles.pos : styles.neg}>{money(view.income - view.spending)}</dd></div>
       </dl>
+      <p className={styles.totalsNote}>
+        {view.slice.length > 1
+          ? `Totals for these ${view.slice.length} months. Income averages ${money(view.income / view.slice.length, false)} a month.`
+          : "Totals for this month."}
+      </p>
 
       <div className={styles.donutRow}>
         <div className={styles.donutWrap}>
