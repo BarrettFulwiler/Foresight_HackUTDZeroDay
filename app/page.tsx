@@ -1,31 +1,23 @@
 import type { Metadata } from "next";
 import styles from "./landing.module.css";
 import { BRAND, SLOGAN } from "../lib/brand";
+import { getDashboardData } from "../lib/finance";
+import { runForecast } from "../lib/forecast";
+import { withLiveBalances } from "../lib/live-accounts";
+import { buildPlan } from "../lib/plans";
+import type { Prefs } from "../lib/prefs";
+import { FuturesCard, WarnCard } from "./landing-futures";
 
-const STARTER_QUESTION = "Can I do a $1,500 trip in March?";
 const DEMO_HREF = "/onboarding?demo=1";
-// The amounts in the example conversations are placeholders: swap in real C005 output once the forecast works.
+// The demo profile's goal (same as DEMO_PREFS in lib/prefs.ts), so the landing matches the demo.
+const DEMO_GOAL: Prefs["goal"] = { kind: "trip", label: "Trip to Cancún", target: 1500, saved: 960, by: "2027-03" };
 
 export const metadata: Metadata = {
   title: `${BRAND} · ${SLOGAN}`,
-  description: "See where your money is headed. Every account, every bank, one honest answer from future-you.",
+  description: "See the day your money runs short, at every bank, and fix it before it happens.",
 };
-
-type Bubble = { from: "you" | "future"; text: string };
-
-const HERO_THREAD: Bubble[] = [
-  { from: "you", text: STARTER_QUESTION },
-  { from: "future", text: "Yes, if you move $300 from your Capital One savings in January. Without it, rent comes up $212 short." },
-  { from: "you", text: "do it" },
-  { from: "future", text: "Done. See you in March." },
-];
-
-const GUARD_THREAD: Bubble[] = [
-  { from: "future", text: "Heads up from March-you: this $240 purchase pushes your trip back 3 weeks." },
-  { from: "future", text: "Allow it anyway?" },
-  { from: "you", text: "skip it" },
-  { from: "future", text: "Held. The trip stays on track." },
-];
+// The hero card uses live Nessie balances, so it always shows the same numbers as the demo.
+export const dynamic = "force-dynamic";
 
 const BANKS = [
   { name: "PNC", accounts: ["Checking", "Savings", "CD", "IRA", "Credit card", "Auto loan", "Personal loan", "Mortgage"] },
@@ -33,9 +25,9 @@ const BANKS = [
 ];
 
 const STEPS = [
-  { title: "Ask in plain words", body: "Ask what you'd ask a friend who's good with money: can I afford this, and when?" },
-  { title: "Future-you checks everything", body: "Every account at every bank, in one picture. Code does the math and checks it before you see a single number." },
-  { title: "Say “do it”", body: "The money moves between your banks. And if a purchase would break the plan, future-you warns you first." },
+  { title: "See the day it goes wrong", body: "Every account at every bank, run forward day by day from today's balances. Foresight finds the exact date your checking runs short." },
+  { title: "Pick a what-if", body: "A trip, paying off a card, a surprise bill. See both futures side by side and get a plan. Code does the math." },
+  { title: "Apply the plan", body: "One tap moves the money between your banks, and the forecast redraws from the new balances." },
 ];
 
 const TRUST = [
@@ -44,32 +36,13 @@ const TRUST = [
   { label: "Explained", body: "Only then does it get put into plain words, from the you who's already there." },
 ];
 
-const BUILT_WITH = ["PNC financial wellness data", "Capital One Nessie", "Next.js"];
+const BUILT_WITH = ["PNC financial wellness data", "Capital One Nessie", "Google Gemini", "Next.js"];
 
-function Thread({ bubbles, name, label, animate = false }: { bubbles: Bubble[]; name: string; label: string; animate?: boolean }) {
-  return (
-    <figure className={styles.phone} aria-label={label}>
-      <div className={styles.phoneTop}>
-        <span className={styles.avatar} aria-hidden="true">{name.charAt(0)}</span>
-        <span className={styles.contact}>{name}</span>
-        <span className={styles.service}>in {BRAND}</span>
-      </div>
-      <div className={styles.thread}>
-        {bubbles.map((b, i) => (
-          <p
-            key={i}
-            className={`${styles.bubble} ${b.from === "you" ? styles.you : styles.future} ${animate ? styles.rise : ""}`}
-            style={animate ? ({ "--d": `${0.35 + i * 0.9}s` } as React.CSSProperties) : undefined}
-          >
-            {b.text}
-          </p>
-        ))}
-      </div>
-    </figure>
-  );
-}
-
-export default function Landing() {
+export default async function Landing() {
+  const data = getDashboardData("C005");
+  const { accounts } = await withLiveBalances(data.accounts);
+  const plan = buildPlan("trip", accounts, data.schedule, data.asOf, DEMO_GOAL);
+  const base = runForecast(accounts, data.schedule, data.asOf);
   return (
     <main className={styles.page}>
       <header className={styles.nav}>
@@ -89,8 +62,8 @@ export default function Landing() {
           <p className={styles.eyebrow}>Your money, seen from the future</p>
           <h1 className={styles.title}>{SLOGAN}.</h1>
           <p className={styles.lead}>
-            {BRAND} sees every account you have, at every bank, and shows you where your money is headed. Ask
-            &ldquo;{STARTER_QUESTION}&rdquo; and future-you answers with the numbers and a plan.
+            {BRAND} sees every account you have, at every bank, and shows you the day your money runs short. Pick a
+            what-if, like a $1,500 trip in March, and future-you shows what goes wrong and moves the money to fix it.
           </p>
           <div className={styles.ctas}>
             <a className={styles.primary} href={DEMO_HREF}>Try the demo</a>
@@ -99,7 +72,8 @@ export default function Landing() {
           <p className={styles.micro}>The demo uses a sample customer. Nothing to install.</p>
         </div>
         <div className={styles.heroArt}>
-          <Thread bubbles={HERO_THREAD} name="March-you" label="Example conversation: asking March-you about a trip" animate />
+          <FuturesCard plan={plan} accounts={accounts} tripDate={`${DEMO_GOAL.by}-10`} />
+          <p className={styles.fCaption}>Live from the demo: a sample customer, with real balances from Capital One&rsquo;s Nessie API.</p>
         </div>
       </section>
 
@@ -124,7 +98,7 @@ export default function Landing() {
 
       <section id="how" className={`${styles.wrap} ${styles.how}`} aria-labelledby="how-title">
         <p className={styles.eyebrow}>How it works</p>
-        <h2 id="how-title" className={styles.h2}>One question. One honest answer.</h2>
+        <h2 id="how-title" className={styles.h2}>See it. Plan it. Fix it.</h2>
         <ol className={styles.steps}>
           {STEPS.map((s, i) => (
             <li key={s.title} className={styles.step}>
@@ -141,11 +115,11 @@ export default function Landing() {
           <p className={styles.eyebrow}>It has your back</p>
           <h2 id="guard-title" className={styles.h2}>Future-you warns you before the mistake, not after.</h2>
           <p className={styles.body}>
-            When a purchase would wreck your plan, it&rsquo;s held for a moment while future-you checks with you.
-            One tap decides whether it goes through.
+            Your bank tells you after you&rsquo;re overdrawn. Foresight runs every account forward from today&rsquo;s
+            balances, so the warning comes weeks early, with the exact day, the amount, and a plan to fix it.
           </p>
         </div>
-        <Thread bubbles={GUARD_THREAD} name="March-you" label="Example conversation: March-you holding a purchase" />
+        <WarnCard base={base} asOf={data.asOf} />
       </section>
 
       <section className={`${styles.wrap} ${styles.trust}`} aria-labelledby="trust-title">

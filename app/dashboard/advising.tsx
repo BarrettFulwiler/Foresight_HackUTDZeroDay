@@ -64,8 +64,8 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
 
       <div className={styles.adviseRow}>
         <div className={styles.voices}>
-          <section className={`${styles.panel} ${styles.voice} ${styles.voiceNow}`} aria-label="Now-you wants">
-            <p className={styles.voiceLabel}>Now-you wants</p>
+          <section className={`${styles.panel} ${styles.voice} ${styles.voiceNow}`} aria-label="Present-you wants">
+            <p className={styles.voiceLabel}>Present-you wants</p>
             <p className={styles.voiceWant}>{plan.want}</p>
           </section>
           <section className={`${styles.panel} ${styles.voice} ${styles.voiceFuture}`} aria-label="Future-you warns">
