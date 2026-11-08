@@ -5,7 +5,7 @@ import { BRAND } from "../../lib/brand";
 import { categoryTotals, monthlyTotals, runForecast, type Forecast } from "../../lib/forecast";
 import { categoryMeta, longMonth, money } from "../../lib/format";
 import { shortDay } from "../../lib/plans";
-import { GOAL_OPTIONS, type Prefs, monthsUntil, usePrefs } from "../../lib/prefs";
+import { goalOption, type Prefs, monthsUntil, usePrefs } from "../../lib/prefs";
 import { DISPLAY_CARDS, type Display, useDisplay } from "../../lib/display";
 import { type Summary, summarize } from "../../lib/summary";
 import SpendingDonut from "./spending-donut";
@@ -15,7 +15,7 @@ import Health from "./health";
 import Advising from "./advising";
 import styles from "./dashboard.module.css";
 
-const TABS = ["View", "Move", "Edit", "Advising"] as const;
+const TABS = ["View", "Edit", "Move", "Advising"] as const;
 type Tab = (typeof TABS)[number];
 
 type Source = "nessie" | "demo";
@@ -136,11 +136,6 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
   return (
     <main className={styles.page}>
       <header className={styles.top}>
-        <a className={styles.brand} href="/"><span className={styles.mark} aria-hidden="true" />{BRAND}</a>
-        <nav className={styles.modeSwitch} aria-label="Account type">
-          <a href="/dashboard" aria-current="page">Individual</a>
-          <a href="/dashboard/company">Company</a>
-        </nav>
         <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
         <div className={styles.profile}>
           <div>
@@ -248,7 +243,7 @@ function Highlights({ prefs, ready, sum, display }: { prefs: Prefs | null; ready
 }
 
 function GoalCard({ goal, asOf, style }: { goal: Prefs["goal"]; asOf: string; style: Display["goal"] }) {
-  const meta = GOAL_OPTIONS.find((o) => o.kind === goal.kind);
+  const meta = goalOption(goal.kind);
   const pct = goal.target ? Math.min(100, (goal.saved / goal.target) * 100) : 0;
   const months = goal.by ? monthsUntil(asOf, goal.by) : 1;
   const perMonth = Math.max(0, goal.target - goal.saved) / months;
