@@ -6,7 +6,7 @@ import { categoryTotals, monthlyTotals, runForecast, type Forecast } from "../..
 import { categoryMeta, longMonth, money } from "../../lib/format";
 import { shortDay } from "../../lib/plans";
 import { goalOption, type Prefs, monthsUntil, usePrefs } from "../../lib/prefs";
-import { DISPLAY_CARDS, type Display, useDisplay } from "../../lib/display";
+import { DISPLAY_CARDS, VIEW_CARDS, type Display, type ViewCardId, useDisplay } from "../../lib/display";
 import type { CompanyInfo } from "../../lib/company-dashboard";
 import { type Summary, summarize } from "../../lib/summary";
 import SpendingDonut from "./spending-donut";
@@ -14,6 +14,7 @@ import SavingsChart from "./savings-chart";
 import MoneySummary from "./money-summary";
 import Health from "./health";
 import Advising from "./advising";
+import CreditScore from "./credit-score";
 import styles from "./dashboard.module.css";
 
 const TABS = ["View", "Edit", "Move", "Advising"] as const;
@@ -42,7 +43,7 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
   const [tab, setTab] = useState<Tab>("View");
   const latest = data.months.at(-1)!;
   const { prefs, ready } = usePrefs();
-  const { display, set: setDisplay, edited: displayEdited, reset: resetDisplay } = useDisplay(prefs);
+  const { display, set: setDisplay, edited: displayEdited, reset: resetDisplay, hidden, toggleHidden, showAll } = useDisplay(prefs);
   const [welcome, setWelcome] = useState(false);
   // The saved goal belongs to whichever kind of account onboarding set up, so a personal goal never shows on a company.
   const goal = prefs && prefs.goals.length > 0 && (prefs.accountType ?? "individual") === (company ? "company" : "individual") ? prefs.goal : undefined;
@@ -146,6 +147,9 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
         initial: (prefs?.name || data.customerId).slice(0, 1).toUpperCase(),
       };
   const estimated = "Before this month, history is estimated from the company's recent Nessie activity.";
+  // Cards this dashboard has (the credit score is personal only), minus the ones hidden on the Edit tab.
+  const viewCards = VIEW_CARDS.filter((c) => !(company && c.personalOnly));
+  const shown = (id: ViewCardId) => viewCards.some((c) => c.id === id) && !hidden.includes(id);
 
   return (
     <main className={styles.page}>
@@ -180,20 +184,33 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
                 <a href="/dashboard/company">Show another company</a>
               </p>
             )}
-            <Highlights goal={goal} ready={ready} sum={sum} display={display} where={company ? `across ${accounts.filter((a) => a.kind === "cash").length} business accounts` : "across PNC and Capital One"} />
-            <div className={styles.row}>
-              <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={display.spendingMonths} layout={display.spending} budget={monthlyBudget} custom={Object.keys(budgets)} note={company ? estimated : undefined} /></section>
-              <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} layout={display.history} scope={company ? "All business checking and savings" : undefined} note={company ? estimated : undefined} /></section>
+            {viewCards.every((c) => hidden.includes(c.id)) && (
+              <section className={`${styles.panel} ${styles.allHidden}`}>
+                <h2 className={styles.cardTitle}>Every card is hidden</h2>
+                <p className={styles.cardSub}>Choose what to show on the Edit tab.</p>
+                <button type="button" className={styles.linkBtn} onClick={showAll}>Show all cards</button>
+              </section>
+            )}
+            {(shown("cash") || shown("goal")) && (
+              <Highlights goal={goal} ready={ready} sum={sum} display={display} showCash={shown("cash")} showGoal={shown("goal")} where={company ? `across ${accounts.filter((a) => a.kind === "cash").length} business accounts` : "across PNC and Capital One"} />
+            )}
+            {(shown("spending") || shown("history")) && (
+            <div className={shown("spending") && shown("history") ? styles.row : styles.rowSingle}>
+              {shown("spending") && <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={display.spendingMonths} layout={display.spending} budget={monthlyBudget} custom={Object.keys(budgets)} note={company ? estimated : undefined} business={Boolean(company)} /></section>}
+              {shown("history") && <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} layout={display.history} scope={company ? "All business checking and savings" : undefined} note={company ? estimated : undefined} /></section>}
             </div>
-            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={display.cash} cuts={cuts} business={Boolean(company)} />
-            <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} layout={display.budget} />
-            <MoneySummary accounts={accounts} source={source} layout={display.accounts} business={Boolean(company)} />
+            )}
+            {shown("health") && <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={display.cash} cuts={cuts} business={Boolean(company)} />}
+            {shown("budget") && <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} layout={display.budget} />}
+            {shown("accounts") && <MoneySummary accounts={accounts} source={source} layout={display.accounts} business={Boolean(company)} />}
+            {shown("credit") && data.credit && <CreditScore accounts={accounts} credit={data.credit} asOf={data.asOf} layout={display.credit} />}
           </>
         )}
         {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} />}
         {tab === "Edit" && (
           <>
-            <EditDisplay display={display} onSet={setDisplay} edited={displayEdited} onReset={resetDisplay} onOpen={setTab} />
+            <EditVisibility cards={viewCards} hidden={hidden} onToggle={toggleHidden} onShowAll={showAll} onOpen={setTab} />
+            <EditDisplay display={display} onSet={setDisplay} edited={displayEdited} onReset={resetDisplay} onOpen={setTab} hidden={hidden} personal={!company} />
             <EditBudgets typical={typical} budgets={budgets} onChange={updateBudgets} cuts={cuts} accounts={accounts} schedule={data.schedule} asOf={data.asOf} onOpen={setTab} />
           </>
         )}
@@ -237,10 +254,11 @@ function Welcome({ prefs, onClose }: { prefs: Prefs; onClose: () => void }) {
   );
 }
 
-function Highlights({ goal, ready, sum, display, where }: { goal?: Prefs["goal"]; ready: boolean; sum: Summary; display: Display; where: string }) {
+function Highlights({ goal, ready, sum, display, where, showCash, showGoal }: { goal?: Prefs["goal"]; ready: boolean; sum: Summary; display: Display; where: string; showCash: boolean; showGoal: boolean }) {
   const days = display.cash === "days";
   return (
-    <div className={styles.highlights}>
+    <div className={showCash && showGoal ? styles.highlights : styles.rowSingle}>
+      {showCash && (
       <section className={`${styles.panel} ${styles.cashCard}`} aria-label="Cash">
         <p className={styles.cashLabel}>{days ? "Your cash covers" : "Cash and savings"}</p>
         <p className={styles.cashValue}>{days ? `${sum.runwayDays} days` : money(sum.liquid, false)}</p>
@@ -250,7 +268,8 @@ function Highlights({ goal, ready, sum, display, where }: { goal?: Prefs["goal"]
             : `${where[0].toUpperCase()}${where.slice(1)} · about ${sum.runwayDays} days of spending`}
         </p>
       </section>
-      {goal ? (
+      )}
+      {!showGoal ? null : goal ? (
         <GoalCard goal={goal} asOf={sum.asOf} style={display.goal} />
       ) : ready ? (
         <section className={`${styles.panel} ${styles.setupCard}`}>
@@ -528,22 +547,61 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
 }
 
 // The Edit tab, part 1: how each View card presents its data (chart or table, and so on).
-function EditDisplay({ display, onSet, edited, onReset, onOpen }: {
+// The Edit tab, part 0: which cards appear on View at all.
+function EditVisibility({ cards, hidden, onToggle, onShowAll, onOpen }: {
+  cards: typeof VIEW_CARDS;
+  hidden: ViewCardId[];
+  onToggle: (id: ViewCardId) => void;
+  onShowAll: () => void;
+  onOpen: (tab: Tab) => void;
+}) {
+  const count = cards.filter((c) => !hidden.includes(c.id)).length;
+  return (
+    <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="vis-title">
+      <h2 id="vis-title" className={styles.cardTitle}>Show on View</h2>
+      <p className={styles.cardSub}>Turn off any card you don&rsquo;t need. Showing {count} of {cards.length}. Saved on this device.</p>
+      <ul className={styles.visList}>
+        {cards.map((c) => {
+          const on = !hidden.includes(c.id);
+          return (
+            <li key={c.id}>
+              <label className={styles.visRow}>
+                <span className={styles.displayName}>
+                  <strong>{c.title}</strong>
+                  <span>{c.about}</span>
+                </span>
+                <input type="checkbox" role="switch" className={styles.switch} checked={on} aria-checked={on} onChange={() => onToggle(c.id)} />
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <div className={styles.editActions}>
+        <button type="button" className={styles.linkBtn} onClick={() => onOpen("View")}>See it on View →</button>
+        {hidden.some((id) => cards.some((c) => c.id === id)) && <button type="button" className={styles.linkBtn} onClick={onShowAll}>Show all cards</button>}
+      </div>
+    </section>
+  );
+}
+
+function EditDisplay({ display, onSet, edited, onReset, onOpen, hidden, personal }: {
   display: Display;
   onSet: <K extends keyof Display>(key: K, value: Display[K]) => void;
   edited: boolean;
   onReset: () => void;
   onOpen: (tab: Tab) => void;
+  hidden: ViewCardId[];
+  personal: boolean;
 }) {
   return (
     <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="display-title">
       <h2 id="display-title" className={styles.cardTitle}>Display</h2>
       <p className={styles.cardSub}>Choose how each card on View shows your data. Changes apply right away and are saved on this device.</p>
       <ul className={styles.displayList}>
-        {DISPLAY_CARDS.map((card) => (
-          <li key={card.id}>
+        {DISPLAY_CARDS.filter((card) => personal || !card.personalOnly).map((card) => (
+          <li key={card.id} className={hidden.includes(card.id as ViewCardId) ? styles.displayOff : undefined}>
             <div className={styles.displayName}>
-              <strong>{card.title}</strong>
+              <strong>{card.title}{hidden.includes(card.id as ViewCardId) && <em className={styles.hiddenTag}>Hidden on View</em>}</strong>
               <span>{card.about}</span>
             </div>
             <div className={styles.displayControls}>

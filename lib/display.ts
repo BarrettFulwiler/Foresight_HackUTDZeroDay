@@ -12,11 +12,12 @@ export type Display = {
   history: "chart" | "change" | "table";
   budget: "boxes" | "waterfall" | "table";
   accounts: "cards" | "balance" | "table";
+  credit: "factors" | "score";
 };
 
 type Option<K extends keyof Display> = { value: Display[K]; label: string };
 type Setting = { [K in keyof Display]: { key: K; label: string; options: Option<K>[] } }[keyof Display];
-export type DisplayCard = { id: string; title: string; about: string; settings: Setting[] };
+export type DisplayCard = { id: string; title: string; about: string; settings: Setting[]; personalOnly?: boolean };
 
 // What the Edit tab lists, one entry per View card, in the order they appear on View.
 export const DISPLAY_CARDS: DisplayCard[] = [
@@ -59,10 +60,31 @@ export const DISPLAY_CARDS: DisplayCard[] = [
     about: "Every account at both banks.",
     settings: [{ key: "accounts", label: "Layout", options: [{ value: "cards", label: "Cards" }, { value: "balance", label: "Have vs. owe" }, { value: "table", label: "Table" }] }],
   },
+  {
+    id: "credit",
+    title: "Credit score",
+    about: "An estimate from your accounts.",
+    personalOnly: true,
+    settings: [{ key: "credit", label: "Show", options: [{ value: "factors", label: "Score and factors" }, { value: "score", label: "Score only" }] }],
+  },
 ];
 
+// Every card on View, for the Edit tab's "Show on View" switches. personalOnly cards don't exist on the company dashboard.
+export type ViewCardId = "cash" | "goal" | "spending" | "history" | "health" | "budget" | "accounts" | "credit";
+export const VIEW_CARDS: { id: ViewCardId; title: string; about: string; personalOnly?: boolean }[] = [
+  { id: "cash", title: "Cash and savings", about: "The headline at the top." },
+  { id: "goal", title: "Your goal", about: "Progress toward your goal." },
+  { id: "spending", title: "Spending", about: "Where the money went." },
+  { id: "history", title: "Account history", about: "Balances over time." },
+  { id: "health", title: "Health cards", about: "Overdraft, cash flow and the third check." },
+  { id: "budget", title: "Budgeting", about: "Last month's income and leftover." },
+  { id: "accounts", title: "Money summary", about: "Every account and loan." },
+  { id: "credit", title: "Credit score", about: "Estimated from your accounts.", personalOnly: true },
+];
+const HIDDEN_KEY = "foresight.hidden";
+
 const KEY = "foresight.display";
-const BASE: Display = { cash: "dollars", goal: "bar", spending: "chart", spendingMonths: 3, history: "chart", budget: "boxes", accounts: "cards" };
+const BASE: Display = { cash: "dollars", goal: "bar", spending: "chart", spendingMonths: 3, history: "chart", budget: "boxes", accounts: "cards", credit: "factors" };
 
 const fromPrefs = (prefs: Prefs | null): Display => ({ ...BASE, cash: prefs?.units ?? BASE.cash, spendingMonths: prefs?.period ?? BASE.spendingMonths });
 
@@ -81,9 +103,30 @@ function clean(raw: unknown): Partial<Display> {
 // The user's display choices on top of the defaults. `changed` holds only what they picked on the Edit tab.
 export function useDisplay(prefs: Prefs | null) {
   const [changed, setChanged] = useState<Partial<Display>>({});
+  const [hidden, setHidden] = useState<ViewCardId[]>([]);
   useEffect(() => {
     try {
       setChanged(clean(JSON.parse(localStorage.getItem(KEY) ?? "{}")));
+    } catch {}
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "[]");
+      if (Array.isArray(saved)) setHidden(VIEW_CARDS.map((c) => c.id).filter((id) => saved.includes(id)));
+    } catch {}
+  }, []);
+  // Show or hide one View card (saved on this device). Builds on the latest list, like `update` below.
+  const toggleHidden = useCallback((id: ViewCardId) => {
+    setHidden((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      try {
+        localStorage.setItem(HIDDEN_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+  const showAll = useCallback(() => {
+    setHidden([]);
+    try {
+      localStorage.setItem(HIDDEN_KEY, "[]");
     } catch {}
   }, []);
   // Builds on the latest saved choices (not this render's copy), so quick clicks don't undo each other.
@@ -104,5 +147,5 @@ export function useDisplay(prefs: Prefs | null) {
       if (value === defaults[key]) delete next[key];
       return next;
     });
-  return { display, set, edited: Object.keys(changed).length > 0, reset: () => update(() => ({})) };
+  return { display, set, edited: Object.keys(changed).length > 0, reset: () => update(() => ({})), hidden, toggleHidden, showAll };
 }

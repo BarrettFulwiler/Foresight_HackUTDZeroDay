@@ -61,6 +61,8 @@ export type DashboardData = {
   transactions: Txn[]; // spending only, oldest first
   schedule: ScheduleEvent[]; // a typical month, for the forecast
   topUps: { total: number; count: number }; // PNC's calibration deposits from an "unlisted external account"
+  // Inputs for the estimated credit score card (personal only; companies don't have a FICO Score).
+  credit?: { debtPayments: number; latePayments: number; since: string }; // since = oldest history month, YYYY-MM
 };
 
 function scheduleLabel(r: Record<string, string>) {
@@ -210,6 +212,14 @@ export function getDashboardData(customerId = "C005"): DashboardData {
     .filter((e) => e.delta !== 0)
     .sort((a, b) => a.day - b.day || b.delta - a.delta);
 
+  // The PNC card's limit comes from PNC's profile data, so utilization can be shown and estimated.
+  const profile = readCsv("profiles.csv").find((r) => r.customer_id === customerId);
+  const card = pncAccounts.find((a) => a.kind === "credit");
+  if (card && profile?.credit_limit) card.limit = Number(profile.credit_limit);
+  const debtPayments = allRows.filter((r) => r.transaction_type === "payment" && (TYPE_INFO[r.account_type]?.kind === "credit" || TYPE_INFO[r.account_type]?.kind === "loan"));
+  const late = allRows.filter((r) => /late|missed|returned payment/i.test(`${r.category} ${r.description}`));
+  const since = accountRows.map((r) => r.history_start).filter(Boolean).sort()[0]?.slice(0, 7) ?? "";
+
   const data: DashboardData = {
     customerId,
     asOf: accountRows[0]?.as_of_date ?? "",
@@ -221,6 +231,7 @@ export function getDashboardData(customerId = "C005"): DashboardData {
     topUps: allRows
       .filter((r) => r.flow_class === "external_transfer")
       .reduce((t, r) => ({ total: round(t.total + Number(r.balance_change)), count: t.count + 1 }), { total: 0, count: 0 }),
+    credit: { debtPayments: debtPayments.length, latePayments: late.length, since },
   };
   cache.set(customerId, data);
   return data;
