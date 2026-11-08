@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
-import { SignIn, SignUp } from "@clerk/nextjs";
+import { SignIn, SignOutButton, SignUp } from "@clerk/nextjs";
 import { BRAND, SLOGAN } from "../../lib/brand";
 import { AUTH_ERRORS } from "../../lib/auth-client";
 import styles from "../onboarding/onboarding.module.css";
@@ -10,7 +10,7 @@ type Details = { type: "individual" | "company"; firstName: string; lastName: st
 // Create account: pick Individual or Company and fill in the names, then Clerk's box takes email and password
 // (and rejects an email that already has an account). Sign in: Clerk's box (errors on an unknown account).
 // Both finish at /start/finish, which sets up the Nessie customer for new accounts.
-export default function StartForm({ initialMode, error, configured }: { initialMode: "signup" | "signin"; error?: string; configured: boolean }) {
+export default function StartForm({ initialMode, error, configured, signedIn = false }: { initialMode: "signup" | "signin"; error?: string; configured: boolean; signedIn?: boolean }) {
   const [mode, setMode] = useState(initialMode);
   const [details, setDetails] = useState<Details>({ type: "individual", firstName: "", lastName: "", companyName: "" });
   const [ready, setReady] = useState(false); // names filled in, show Clerk's email + password box
@@ -61,14 +61,25 @@ export default function StartForm({ initialMode, error, configured }: { initialM
           <h2 id="auth-title" className={styles.cardTitle}>{mode === "signup" ? "Create your account" : "Welcome back"}</h2>
           {problem && <p className={styles.authError} role="alert">{problem}</p>}
 
-          {configured && mode === "signin" && (
+          {/* Signed in but setup didn't finish (the page only shows this with an error; otherwise it forwards on). */}
+          {configured && signedIn && (
+            <div className={styles.form}>
+              <p className={styles.small}>You&rsquo;re signed in, but your Foresight account isn&rsquo;t set up yet.</p>
+              <a className={styles.primaryBtn} href="/start/finish" style={{ display: "block", textAlign: "center", textDecoration: "none" }}>Try again</a>
+              <SignOutButton redirectUrl="/start?mode=signin">
+                <button type="button" className={styles.linkBtn}>Sign out and use a different account</button>
+              </SignOutButton>
+            </div>
+          )}
+
+          {configured && !signedIn && mode === "signin" && (
             <div className={styles.clerkBox}>
               {/* signUpForceRedirectUrl: a Google sign-in that Clerk turns into a new sign-up also finishes at /start/finish. */}
               <SignIn routing="hash" forceRedirectUrl="/start/finish" signUpForceRedirectUrl="/start/finish" signUpUrl="/start" />
             </div>
           )}
 
-          {configured && mode === "signup" && !ready && (
+          {configured && !signedIn && mode === "signup" && !ready && (
             <form onSubmit={next} className={styles.form}>
               <div className={styles.typePick} role="radiogroup" aria-label="Account type">
                 {(["individual", "company"] as const).map((t) => (
@@ -96,7 +107,7 @@ export default function StartForm({ initialMode, error, configured }: { initialM
             </form>
           )}
 
-          {configured && mode === "signup" && ready && (
+          {configured && !signedIn && mode === "signup" && ready && (
             <>
               {named && (
                 <p className={styles.small}>
