@@ -13,8 +13,10 @@ const clerkHost = (() => {
 })();
 const clerk = clerkHost ? ` ${clerkHost}` : "";
 const captcha = " https://challenges.cloudflare.com";
-// Clerk's sign-up protection loads a script from cdn.protect.clerk.com and reports back to it; blocking it can break sign-up.
+// Clerk's sign-up protection loads a script from cdn.protect.clerk.com, then probes *.client.protect.clerk.com on
+// several non-standard ports (8443, 18443, 2082, 992), so connections to that host need ":*". Blocking it can break sign-up.
 const clerkProtect = " https://cdn.protect.clerk.com https://*.protect.clerk.com";
+const clerkProtectConnect = " https://cdn.protect.clerk.com https://*.protect.clerk.com:*";
 
 const config: NextConfig = {
   poweredByHeader: false,
@@ -24,7 +26,7 @@ const config: NextConfig = {
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "same-origin" },
       { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-      { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "") + clerk + captcha + clerkProtect + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.clerk.com; connect-src 'self'" + clerk + clerkProtect + "; frame-src" + captcha + "; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
+      { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "") + clerk + captcha + clerkProtect + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.clerk.com; connect-src 'self'" + clerk + clerkProtectConnect + "; frame-src" + captcha + "; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
     ] }];
   },
 };
