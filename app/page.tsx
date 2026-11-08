@@ -167,7 +167,7 @@ export default async function Landing() {
 
       <section className={`${styles.wrap} ${styles.tryIt}`} aria-labelledby="try-title">
         <h2 id="try-title" className={styles.h2}>See where your money is headed.</h2>
-        <p className={styles.body}>Set up your own view in a couple of minutes.</p>
+        <p className={styles.body}>Set up your own view in a couple of minutes, or demo it: pick personal or business, click through the pre-filled setup, and land on the forecast.</p>
         <div className={styles.ctas}>
           <a className={styles.primary} href="/onboarding">Set up your own view</a>
           <a className={styles.secondary} href="/onboarding?demo=1">Demo it</a>

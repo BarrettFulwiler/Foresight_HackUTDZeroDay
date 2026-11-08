@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "../../lib/brand";
 import { categoryMeta, currencySymbol, longMonth, money, moneyIn, shortMonth } from "../../lib/format";
-import { DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, monthsUntil, savePrefs } from "../../lib/prefs";
+import { DEMO_BUSINESS_PREFS, DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, monthsUntil, savePrefs } from "../../lib/prefs";
 import type { Summary } from "../../lib/summary";
 import { markDemo } from "../../lib/auth-client";
 import DatePicker, { formatDate } from "./date-picker";
@@ -97,14 +97,15 @@ export default function Onboarding({ summary, memberType }: { summary: Summary; 
   const [p, setP] = useState<Draft>(memberType ? { ...BLANK, accountType: memberType } : BLANK);
   const [today, setToday] = useState("");
   useEffect(() => setToday(isoDay(new Date())), []);
+  const [demo, setDemo] = useState(false);
 
-  // ?demo=1 goes straight to the dashboard with the demo profile, so visitors see the forecast first
-  // (they can customize later from the avatar). Otherwise start from what the sign-up form passed along.
+  // ?demo=1 ("Try the demo") starts here with every step pre-filled, so the visitor picks personal or business
+  // and clicks through. Otherwise start from what the sign-up form passed along.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("demo")) {
       markDemo(); // lets the demo into the dashboard without an account
-      savePrefs({ ...DEMO_PREFS, completedAt: new Date().toISOString() });
-      router.replace("/dashboard?welcome=1");
+      setDemo(true);
+      setP({ ...DEMO_PREFS, completedAt: "" });
       return;
     }
     try {
@@ -118,8 +119,16 @@ export default function Onboarding({ summary, memberType }: { summary: Summary; 
   const setConsent = (c: Partial<Prefs["consent"]>) => setP((cur) => ({ ...cur, consent: { ...cur.consent, ...c } }));
   // Personal and business goals are different lists, so switching who it's for clears the goals picked so far.
   // Signed-in clients can't change it (see memberType above); only visitors pick here.
+  // In the demo, switching fills in that type's demo goals instead, so every step stays ready to click through.
+  const demoFor = (accountType: Draft["accountType"]) => (accountType === "company" ? DEMO_BUSINESS_PREFS : DEMO_PREFS);
   const setType = (accountType: Prefs["accountType"]) =>
-    memberType ? undefined : setP((cur) => (cur.accountType === accountType ? cur : { ...cur, accountType, goals: [], goal: BLANK.goal }));
+    memberType
+      ? undefined
+      : setP((cur) => {
+          if (cur.accountType === accountType) return cur;
+          const goals = demo ? { goals: demoFor(accountType).goals, goal: demoFor(accountType).goal } : { goals: [], goal: BLANK.goal };
+          return { ...cur, accountType, ...goals };
+        });
   const business = p.accountType === "company";
   const options = goalOptionsFor(p.accountType || "individual");
   const regions = REGIONS[p.country];
@@ -180,8 +189,10 @@ export default function Onboarding({ summary, memberType }: { summary: Summary; 
         <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
         <button type="button" className={styles.skip} onClick={() => {
           markDemo();
-          finish({ ...DEMO_PREFS, name: p.name || DEMO_PREFS.name });
-        }}>Skip, use demo profile</button>
+          finish({ ...demoFor(p.accountType), name: p.name || DEMO_PREFS.name });
+        }}>
+          {demo ? `Skip to the ${p.accountType === "company" ? "company" : "personal"} dashboard` : "Skip, use demo profile"}
+        </button>
       </header>
 
       <div className={styles.flow}>
@@ -196,7 +207,9 @@ export default function Onboarding({ summary, memberType }: { summary: Summary; 
           {step === 0 && (
             <>
               <h1 className={styles.stepTitle}>{p.name ? `Hi ${p.name}! ` : ""}Who is this for?</h1>
-              <p className={styles.stepSub}>We&rsquo;ll tailor what you see to how you use money.</p>
+              <p className={styles.stepSub}>
+                {demo ? "Demo: pick personal or business. Every step is already filled in, so just press Continue." : "We’ll tailor what you see to how you use money."}
+              </p>
               <div className={styles.choices} role="radiogroup" aria-label="Account type">
                 <Choice checked={p.accountType === "individual"} disabled={Boolean(memberType) && memberType !== "individual"} title="Just me" text="My own accounts, bills and goals." onSelect={() => setType("individual")} />
                 <Choice checked={p.accountType === "company"} disabled={Boolean(memberType) && memberType !== "company"} title="My company" text="Business accounts, loans and cash on hand." onSelect={() => setType("company")} />
