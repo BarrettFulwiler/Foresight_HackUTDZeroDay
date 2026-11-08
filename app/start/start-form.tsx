@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { SignIn, SignUp } from "@clerk/nextjs";
 import { BRAND, SLOGAN } from "../../lib/brand";
 import { AUTH_ERRORS } from "../../lib/auth-client";
@@ -16,6 +16,17 @@ export default function StartForm({ initialMode, error, configured }: { initialM
   const [ready, setReady] = useState(false); // names filled in, show Clerk's email + password box
   const problem = !configured ? "Login isn't set up yet. Add the Clerk keys to .env." : error ? (AUTH_ERRORS[error] ?? AUTH_ERRORS.failed) : "";
   const set = (k: keyof Details, v: string) => setDetails((d) => ({ ...d, [k]: v }));
+
+  // "Continue with Google" for someone without an account: Clerk turns the sign-in into a sign-up and sends them
+  // back here as /start#/continue (or #/verify...). Show Clerk's sign-up box straight away so it can finish,
+  // instead of our names form; /start/finish then sets up a personal account from their Google profile.
+  useEffect(() => {
+    if (/^#\/(continue|verify|sso-callback)/.test(window.location.hash)) {
+      setMode("signup");
+      setReady(true);
+    }
+  }, []);
+  const named = details.type === "company" ? details.companyName.trim() : `${details.firstName} ${details.lastName}`.trim();
 
   function next(e: FormEvent) {
     e.preventDefault();
@@ -52,7 +63,8 @@ export default function StartForm({ initialMode, error, configured }: { initialM
 
           {configured && mode === "signin" && (
             <div className={styles.clerkBox}>
-              <SignIn routing="hash" forceRedirectUrl="/start/finish" signUpUrl="/start" />
+              {/* signUpForceRedirectUrl: a Google sign-in that Clerk turns into a new sign-up also finishes at /start/finish. */}
+              <SignIn routing="hash" forceRedirectUrl="/start/finish" signUpForceRedirectUrl="/start/finish" signUpUrl="/start" />
             </div>
           )}
 
@@ -86,14 +98,17 @@ export default function StartForm({ initialMode, error, configured }: { initialM
 
           {configured && mode === "signup" && ready && (
             <>
-              <p className={styles.small}>
-                {details.type === "company" ? details.companyName : `${details.firstName} ${details.lastName}`} ·{" "}
-                <button type="button" className={styles.linkBtn} onClick={() => setReady(false)}>Change</button>
-              </p>
+              {named && (
+                <p className={styles.small}>
+                  {named} ·{" "}
+                  <button type="button" className={styles.linkBtn} onClick={() => setReady(false)}>Change</button>
+                </p>
+              )}
               <div className={styles.clerkBox}>
                 <SignUp
                   routing="hash"
                   forceRedirectUrl="/start/finish"
+                  signInForceRedirectUrl="/start/finish"
                   signInUrl="/start?mode=signin"
                   unsafeMetadata={details.type === "company" ? { type: "company", companyName: details.companyName.trim() } : { type: "individual", firstName: details.firstName.trim(), lastName: details.lastName.trim() }}
                 />
