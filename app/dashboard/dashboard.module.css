@@ -1315,6 +1315,292 @@
   }
 }
 
+/* ---------- Advising: what-ifs, two futures, the plan ---------- */
+.advise {
+  display: grid;
+  gap: 20px;
+}
+
+.presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.preset,
+.presetOn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.preset:hover {
+  border-color: #b9c4f5;
+}
+
+.presetOn,
+.presetOn:hover {
+  border-color: var(--accent);
+  background: #f4f6ff;
+}
+
+.presetIcon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.presetText {
+  display: grid;
+  gap: 2px;
+}
+
+.presetText strong {
+  font-size: 15px;
+}
+
+.presetText span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.adviseRow {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.voices {
+  display: grid;
+  gap: 16px;
+}
+
+.voice {
+  display: grid;
+  gap: 8px;
+  border-left: 5px solid var(--line);
+}
+
+.voiceNow {
+  border-left-color: var(--accent);
+}
+
+.voiceFuture {
+  border-left-color: var(--violet);
+  background: linear-gradient(160deg, #faf8ff, #ffffff);
+}
+
+.voiceLabel {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.voiceWant {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.voiceList {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.planChartWrap {
+  margin: 10px 0 0;
+}
+
+.overdraftZone {
+  fill: #fee2e2;
+  opacity: 0.6;
+}
+
+.zeroLine {
+  stroke: #ef4444;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.lineAsIs,
+.linePlan {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.lineAsIs {
+  stroke: #dc2626;
+}
+
+.linePlan {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.legendRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.legendRow span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendRow i {
+  display: inline-block;
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.swAsIs {
+  background: #dc2626;
+}
+
+.swPlan {
+  background: var(--accent);
+}
+
+.swZone {
+  height: 10px !important;
+  background: #fee2e2;
+}
+
+.compare {
+  width: 100%;
+  margin-top: 14px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.compare th,
+.compare td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+
+.compare th[scope="row"] {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.compare td:last-child {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.cAsIs {
+  color: #dc2626;
+}
+
+.cPlan {
+  color: var(--accent);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.planCard {
+  display: grid;
+  gap: 14px;
+}
+
+.planSteps {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.planOutcome {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.applyRow {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.appliedList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.appliedList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.linkBtn {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.linkBtn:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 960px) {
+  .adviseRow,
+  .presets {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- Move tab: live transfers and Nessie receipts ---------- */
 .moveGrid {
   display: grid;

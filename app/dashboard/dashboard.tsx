@@ -9,6 +9,7 @@ import SpendingDonut from "./spending-donut";
 import SavingsChart from "./savings-chart";
 import MoneySummary from "./money-summary";
 import Health from "./health";
+import Advising from "./advising";
 import styles from "./dashboard.module.css";
 
 const TABS = ["View", "Move", "Edit", "Advising"] as const;
@@ -53,7 +54,8 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
 
   const balanceOf = (list: Account[], nessieId: string) => list.find((a) => a.nessieId === nessieId)?.balance ?? 0;
 
-  async function sendTransfer(fromId: string, toId: string, amount: number) {
+  // Sends one Nessie transfer and tracks it as a receipt. Returns the receipt's id.
+  async function sendTransfer(fromId: string, toId: string, amount: number): Promise<string> {
     const requestId = crypto.randomUUID();
     const receipt: Receipt = { requestId, fromId, toId, amount, status: "sending", createdAt: Date.now(), before: { from: balanceOf(accounts, fromId), to: balanceOf(accounts, toId) } };
     setReceipts((r) => [receipt, ...r]);
@@ -61,12 +63,15 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
     try {
       const res = await fetch("/api/nessie/transfers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fromId, toId, amount, requestId }) });
       const body = await res.json();
-      if (!res.ok) return update({ status: "failed", error: body.error || "Transfer failed" });
-      update({ id: body.transaction.id, status: "pending" });
-      refreshAccounts(); // shows the hold on the sending account right away
+      if (!res.ok) update({ status: "failed", error: body.error || "Transfer failed" });
+      else {
+        update({ id: body.transaction.id, status: "pending" });
+        refreshAccounts(); // shows the hold on the sending account right away
+      }
     } catch {
       update({ status: "failed", error: "Couldn't reach the server" });
     }
+    return requestId;
   }
 
   // Poll pending transfers until Nessie's once-a-minute sweep completes them, then refresh balances.
@@ -141,7 +146,18 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
         )}
         {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} />}
         {tab === "Edit" && <EditBudgets data={data} />}
-        {tab === "Advising" && <Advising />}
+        {tab === "Advising" && (
+          <Advising
+            accounts={accounts}
+            schedule={data.schedule}
+            asOf={data.asOf}
+            goal={prefs && prefs.goals.length ? prefs.goal : undefined}
+            live={source === "nessie"}
+            receipts={receipts}
+            onTransfer={sendTransfer}
+            onShowReceipts={() => setTab("Move")}
+          />
+        )}
       </div>
 
       <footer className={styles.foot}>Synthetic data only · Educational prototype · Not financial advice.</footer>
@@ -253,7 +269,7 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
   source: Source;
   sourceError?: string;
   receipts: Receipt[];
-  onTransfer: (fromId: string, toId: string, amount: number) => Promise<void>;
+  onTransfer: (fromId: string, toId: string, amount: number) => Promise<unknown>;
 }) {
   const linked = accounts.filter((a) => a.nessieId);
   const sources = linked.filter((a) => a.kind === "cash");
@@ -387,13 +403,3 @@ function EditBudgets({ data }: { data: DashboardData }) {
   );
 }
 
-// Placeholder until the plan view is built: what-if presets, "now-you wants / future-you warns",
-// and an Apply plan button that runs the Nessie transfer.
-function Advising() {
-  return (
-    <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="advise-title">
-      <h2 id="advise-title" className={styles.cardTitle}>Future-you&rsquo;s plans</h2>
-      <p className={styles.cardSub}>Pick a what-if, see what now-you wants next to what future-you warns, then apply the plan across both banks.</p>
-    </section>
-  );
-}

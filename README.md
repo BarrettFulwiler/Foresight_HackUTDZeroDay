@@ -34,7 +34,7 @@ Transfers go through our own server routes (`app/api/nessie/*`), so the key neve
 
 - `app/` — pages. Each page has its own CSS module; `globals.css` is only a reset.
 - `lib/finance.ts` — reads the CSVs in `data/` (server only) for the demo customer **C005**.
-- `lib/nessie.ts` — server-only Nessie client. `lib/live-accounts.ts` swaps in live balances for the 5 linked accounts (PNC checking and savings, Capital One checking, savings and card).
+- `lib/nessie.ts` — server-only Nessie client. `lib/live-accounts.ts` swaps in live balances for the 6 linked accounts (PNC checking, savings and card; Capital One checking, savings and card).
 - `lib/capital-one-demo.ts` — fallback Capital One accounts when Nessie isn't reachable.
 - `lib/prefs.ts` — onboarding choices, saved in the browser for now.
 - `lib/summary.ts`, `lib/format.ts`, `lib/brand.ts` — shared numbers, formatting, and the product name.
@@ -42,8 +42,9 @@ Transfers go through our own server routes (`app/api/nessie/*`), so the key neve
 ## Status
 
 - Sign-in is not connected to a back end yet; the demo user is hardcoded to customer C005.
-- Balances for the 5 linked accounts are live from Nessie, and the Move tab makes real Nessie transfers with receipts. PNC's history and analysis still come from PNC's CSVs.
-- The Advising tab is a placeholder for the plan view.
+- Balances for the 6 linked accounts are live from Nessie, and the Move tab makes real Nessie transfers with receipts. PNC's history and analysis still come from PNC's CSVs.
+- `lib/forecast.ts` projects every account 12 months ahead from live balances; the View tab's health indicators and the Advising tab use it.
+- Advising: pick a what-if (trip, pay off card, surprise bill) to see "now-you wants / future-you warns", both futures on a chart, and a plan. **Apply plan** sends the plan's transfer through Nessie; top-ups and spending cuts are simulated in the forecast (`lib/plans.ts`).
 
 ## Data
 

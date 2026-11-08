@@ -6,6 +6,7 @@ import { getAccount, nessieConfigured } from "./nessie";
 const LINKS: { accountId: string; env: string }[] = [
   { accountId: "A-C005-CHECKING", env: "NESSIE_PNC_CHECKING_ID" },
   { accountId: "A-C005-SAVINGS", env: "NESSIE_PNC_SAVINGS_ID" },
+  { accountId: "A-C005-CREDIT_CARD", env: "NESSIE_PNC_CARD_ID" },
   { accountId: "COF-CHECKING", env: "NESSIE_CHECKING_ID" },
   { accountId: "COF-SAVINGS", env: "NESSIE_SAVINGS_ID" },
   { accountId: "COF-CARD", env: "NESSIE_CARD_ID" },
