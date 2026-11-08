@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MonthSpend, Txn } from "../../lib/finance";
-import { KIND_LABEL, categoryMeta, money, shortDate, shortMonth } from "../../lib/format";
+import { KIND_LABEL, categoryMeta, longMonth, money, shortDate, shortMonth } from "../../lib/format";
 import { LIST_KEY } from "../../lib/prefs";
 import type { Display } from "../../lib/display";
+import GeminiFeedback from "./gemini-feedback";
 import styles from "./dashboard.module.css";
 
 const SIZE = 220;
@@ -17,7 +18,7 @@ type Cat = ReturnType<typeof categoryMeta> & { key: string; amount: number; shar
 // layout = donut chart with a category list, ranked bars, spending vs. monthly budget, or a table (set on the Edit tab).
 // budget = monthly budget per category: the user's Edit-tab budget, or their typical month if they haven't set one.
 // custom = categories whose budget the user set on the Edit tab (the rest use the typical month).
-export default function SpendingDonut({ months, txns, windowSize = 3, layout = "chart", budget = {}, custom = [], note }: {
+export default function SpendingDonut({ months, txns, windowSize = 3, layout = "chart", budget = {}, custom = [], note, business = false }: {
   months: MonthSpend[];
   txns: Txn[];
   windowSize?: number;
@@ -25,6 +26,7 @@ export default function SpendingDonut({ months, txns, windowSize = 3, layout = "
   budget?: Record<string, number>;
   custom?: string[];
   note?: string; // e.g. that a company's earlier months are estimated
+  business?: boolean; // the company dashboard (Gemini is told it's a business)
 }) {
   const WINDOW = windowSize;
   const [end, setEnd] = useState(months.length - 1);
@@ -69,6 +71,8 @@ export default function SpendingDonut({ months, txns, windowSize = 3, layout = "
   const shown = hover ?? selected;
   const shownCat = view.cats.find((c) => c.key === shown);
   const selectedCat = view.cats.find((c) => c.key === selected);
+  // What Gemini is told: exactly what this card is showing, in whichever layout and period is on screen.
+  const facts = useMemo(() => spendingFacts({ view, layout, budget, custom, business, note, selected: selectedCat }), [view, layout, budget, custom, business, note, selectedCat]);
 
   function choose(key: string) {
     const next = selected === key ? null : key;
@@ -271,8 +275,59 @@ export default function SpendingDonut({ months, txns, windowSize = 3, layout = "
       </div>
       </>
       )}
+
+      <GeminiFeedback facts={facts} topic="spending" label="Ask Gemini about this spending" placeholder="Ask Gemini about this spending" />
     </div>
   );
+}
+
+const LAYOUT_WORDS: Record<Display["spending"], string> = {
+  chart: "a donut chart of spending by category, with a list of categories",
+  bars: "ranked bars, one per category, biggest first",
+  budget: "each category's monthly spending against its monthly budget",
+  table: "a table of every category with its amount and share",
+};
+
+// The facts sent to Gemini for the Spending card (at most 20 sentences, every number as the card shows it).
+function spendingFacts({ view, layout, budget, custom, business, note, selected }: {
+  view: { slice: MonthSpend[]; prev: MonthSpend[]; first: string; last: string; income: number; spending: number; cats: Cat[] };
+  layout: Display["spending"];
+  budget: Record<string, number>;
+  custom: string[];
+  business: boolean;
+  note?: string;
+  selected?: Cat;
+}): string[] {
+  const r = (n: number) => money(n, false);
+  const n = Math.max(1, view.slice.length);
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const facts = [
+    business ? "This is a business's spending, from its business accounts." : "This is one person's spending, across their accounts at both banks.",
+    `The card shows ${LAYOUT_WORDS[layout]}.`,
+    n > 1 ? `The period is ${shortMonth(view.first)} to ${shortMonth(view.last)}, ${n} months.` : `The period is ${longMonth(view.first)}.`,
+    `Spending totals ${r(view.spending)} and income ${r(view.income)}${n > 1 ? ` (about ${r(view.income / n)} a month)` : ""}.`,
+    `Income minus spending, before loan payments, is ${view.income - view.spending < 0 ? "-" : ""}${r(Math.abs(view.income - view.spending))}.`,
+  ];
+  if (note) facts.push(note);
+  if (layout === "budget") {
+    facts.push(custom.length ? `Budgets are set for ${custom.length} of ${view.cats.length} categories; the rest use the typical month.` : "No budgets are set yet, so each category is compared with its typical month.");
+    for (const c of view.cats) {
+      if (budget[c.key] === undefined) continue;
+      const actual = c.amount / n;
+      const gap = actual - budget[c.key];
+      const state = Math.abs(gap) < 0.5 ? "on budget" : gap > 0 ? `${r(gap)} over` : `${r(-gap)} under`;
+      facts.push(`${c.label}: ${r(actual)} a month against a ${r(budget[c.key])} budget, ${state}.`);
+    }
+  } else {
+    for (const c of view.cats.slice(0, 5)) facts.push(`${c.label}: ${r(c.amount)}, ${pct(c.share)} of spending${n > 1 ? `, about ${r(c.amount / n)} a month` : ""}.`);
+    if (view.cats.length > 5) facts.push(`${view.cats.length - 5} smaller categories make up the rest.`);
+  }
+  if (selected) {
+    const prev = view.prev.reduce((t, m) => t + (m.byCategory[selected.key] ?? 0), 0);
+    const change = prev ? (selected.amount - prev) / prev : null;
+    facts.push(`They have ${selected.label} open: ${r(selected.amount)}, ${pct(selected.share)} of spending${change === null ? "" : `, ${change >= 0 ? "up" : "down"} ${pct(Math.abs(change))} from the ${view.prev.length === 1 ? "month" : `${view.prev.length} months`} before (${r(prev)})`}.`);
+  }
+  return facts.slice(0, 20);
 }
 
 // Every category as a horizontal bar, biggest first. Bars compare more easily than donut slices.
