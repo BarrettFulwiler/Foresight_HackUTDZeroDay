@@ -4,7 +4,8 @@ import type { Account, ScheduleEvent } from "../../lib/finance";
 import { planFacts, splitNumbers } from "../../lib/explain";
 import type { Forecast } from "../../lib/forecast";
 import { money, shortMonth } from "../../lib/format";
-import { FLOOR, PRESETS, type Plan, type PresetId, buildPlan, compareRows, shortDay } from "../../lib/plans";
+import { BUSINESS_PRESETS, buildBusinessPlan } from "../../lib/business-plans";
+import { FLOOR, PRESETS, type BusinessPresetId, type Plan, type PresetId, buildPlan, compareRows, shortDay } from "../../lib/plans";
 import type { Prefs } from "../../lib/prefs";
 import { buildCustomPlan, customFacts, type CustomPlan, type WhatIfSpec } from "../../lib/whatif";
 import type { Receipt } from "./dashboard";
@@ -20,22 +21,30 @@ type Props = {
   onTransfer: (fromNessieId: string, toNessieId: string, amount: number) => Promise<string>;
   onShowReceipts: () => void;
   cuts: Record<string, number>; // budget changes from the Edit tab
+  companyId?: string; // the company dashboard: business what-ifs, and the chat runs on this company's data
 };
 
-export default function Advising({ accounts, schedule, asOf, goal, live, receipts, onTransfer, onShowReceipts, cuts }: Props) {
-  const [preset, setPreset] = useState<PresetId>("trip");
+export default function Advising({ accounts, schedule, asOf, goal, live, receipts, onTransfer, onShowReceipts, cuts, companyId }: Props) {
+  const business = Boolean(companyId);
+  const presets = business ? BUSINESS_PRESETS : PRESETS;
+  const [preset, setPreset] = useState<PresetId | BusinessPresetId>(business ? "slow" : "trip");
   // A typed what-if: the server reads the question (Gemini) and returns the spec; the plan itself is
   // recomputed here from live balances and Edit budgets, so it redraws after Apply like the presets.
   const [customSpec, setCustomSpec] = useState<WhatIfSpec | null>(null);
   const [applied, setApplied] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState(false);
-  const presetPlan = useMemo(() => buildPlan(preset, accounts, schedule, asOf, goal, cuts), [preset, accounts, schedule, asOf, goal, cuts]);
+  const presetPlan = useMemo(
+    () => (business ? buildBusinessPlan(preset as BusinessPresetId, accounts, schedule, asOf, goal, cuts) : buildPlan(preset as PresetId, accounts, schedule, asOf, goal, cuts)),
+    [business, preset, accounts, schedule, asOf, goal, cuts],
+  );
   const custom = useMemo(() => (customSpec ? buildCustomPlan(customSpec, accounts, schedule, asOf, cuts) : null), [customSpec, accounts, schedule, asOf, cuts]);
   const plan: Plan | CustomPlan = custom ?? presetPlan;
   const planKey = custom ? `custom:${custom.want}` : preset;
   const facts = useMemo(() => (custom ? customFacts(custom, accounts) : planFacts(presetPlan, accounts)), [custom, presetPlan, accounts]);
 
   const nessie = (id: string) => accounts.find((a) => a.id === id)?.nessieId;
+  const mainChecking = accounts.find((a) => a.id === plan.asIs.checkingId);
+  const checkingName = business ? (mainChecking?.name ?? "Checking") : "PNC checking";
   const name = (id: string) => {
     const a = accounts.find((x) => x.id === id);
     return a ? `${a.bank} ${a.name}` : id;
@@ -52,7 +61,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
     setBusy(false);
   }
 
-  function pickPreset(id: PresetId) {
+  function pickPreset(id: PresetId | BusinessPresetId) {
     setCustomSpec(null);
     setPreset(id);
   }
@@ -61,9 +70,9 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
     <div className={styles.advise}>
       <section className={styles.panel} aria-labelledby="ask-title">
         <h2 id="ask-title" className={styles.cardTitle}>Ask future-you</h2>
-        <p className={styles.cardSub}>Pick a what-if. Foresight runs your next 12 months both ways, using your real balances at both banks{Object.keys(cuts).length ? " and your budgets from Edit" : ""}.</p>
+        <p className={styles.cardSub}>Pick a what-if. Foresight runs the next 12 months both ways, using {business ? "the company's live Nessie balances" : "your real balances at both banks"}{Object.keys(cuts).length ? " and your budgets from Edit" : ""}.</p>
         <div className={styles.presets} role="radiogroup" aria-label="What-if">
-          {PRESETS.map((p) => (
+          {presets.map((p) => (
             <button key={p.id} type="button" role="radio" aria-checked={!custom && preset === p.id} className={!custom && preset === p.id ? styles.presetOn : styles.preset} onClick={() => pickPreset(p.id)}>
               <span className={styles.presetText}>
                 <strong>{p.title}</strong>
@@ -72,7 +81,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
             </button>
           ))}
         </div>
-        <WhatIfChat onResult={setCustomSpec} activeTitle={custom?.title} cuts={cuts} />
+        <WhatIfChat onResult={setCustomSpec} activeTitle={custom?.title} cuts={cuts} companyId={companyId} />
       </section>
 
       <div className={styles.adviseRow}>
@@ -98,7 +107,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
           )}
         </div>
         <section className={styles.panel} aria-labelledby="pc-title">
-          <h2 id="pc-title" className={styles.cardTitle}>{custom ? `${custom.title} · PNC checking, next 12 months` : "PNC checking, next 12 months"}</h2>
+          <h2 id="pc-title" className={styles.cardTitle}>{custom ? `${custom.title} · ` : ""}{checkingName}, next 12 months</h2>
           <PlanChart asIs={plan.asIs} withPlan={plan.withPlan} />
           <Compare asIs={plan.asIs} withPlan={plan.withPlan} cardIds={accounts.filter((a) => a.kind === "credit").map((a) => a.id)} />
         </section>
@@ -167,12 +176,19 @@ const EXAMPLES = [
   "Can I afford a $3,000 car repair next month?",
   "What if I save $200 a month?",
 ];
+const BUSINESS_EXAMPLES = [
+  "What if we buy a $40,000 truck next month?",
+  "What if we cut marketing by $2,000 a month?",
+  "Can we cover a $25,000 tax bill in April?",
+  "What if we save $10,000 a month?",
+];
 
 // Free-text what-if chat: type anything, Gemini reads it, the forecast engine runs both futures,
 // and future-you replies in the thread. The full result (chart, plan) replaces the preset below.
-function WhatIfChat({ onResult, activeTitle, cuts }: { onResult: (spec: WhatIfSpec) => void; activeTitle?: string; cuts: Record<string, number> }) {
+function WhatIfChat({ onResult, activeTitle, cuts, companyId }: { onResult: (spec: WhatIfSpec) => void; activeTitle?: string; cuts: Record<string, number>; companyId?: string }) {
+  const examples = companyId ? BUSINESS_EXAMPLES : EXAMPLES;
   const [messages, setMessages] = useState<ChatMsg[]>([
-    { role: "future", text: "Ask me anything. I'll run your next 12 months both ways, as is and with a plan, using your real balances at both banks." },
+    { role: "future", text: companyId ? "Ask me anything about the company. I'll run the next 12 months both ways, as is and with a plan, using its live Nessie balances." : "Ask me anything. I'll run your next 12 months both ways, as is and with a plan, using your real balances at both banks." },
   ]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -184,7 +200,7 @@ function WhatIfChat({ onResult, activeTitle, cuts }: { onResult: (spec: WhatIfSp
     setSending(true);
     setMessages((m) => [...m, { role: "you", text: question }, { role: "future", text: "Running your next 12 months both ways…" }]);
     try {
-      const res = await fetch("/api/whatif", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, cuts }) });
+      const res = await fetch("/api/whatif", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, cuts, companyId }) });
       const data = (await res.json().catch(() => ({}))) as WhatIfResponse;
       if (!res.ok || !data.spec || !data.answer) throw new Error(data.error ?? "Future-you didn't answer. Try again.");
       onResult(data.spec);
@@ -193,7 +209,7 @@ function WhatIfChat({ onResult, activeTitle, cuts }: { onResult: (spec: WhatIfSp
         data.answer.fallback
           ? "Written from the forecast (Gemini's reply wasn't used)"
           : `✓ All ${data.answer.checked} numbers match the forecast · Written by ${data.answer.model ? modelName(data.answer.model) : "Gemini"}${data.parsedBy === "rules" ? " · Question read by the backup parser" : ""}`,
-        data.source === "nessie" ? "Balances: live from Nessie, both banks" : "Balances: Nessie unreachable, using the demo snapshot",
+        companyId ? "Balances: live from Nessie, the company's accounts" : data.source === "nessie" ? "Balances: live from Nessie, both banks" : "Balances: Nessie unreachable, using the demo snapshot",
         "Chart and plan below now show this what-if",
       ].join("\n");
       setMessages((m) => [...m.slice(0, -1), { role: "future", text: data.answer.message, headline: data.answer.headline, meta }]);
@@ -218,7 +234,7 @@ function WhatIfChat({ onResult, activeTitle, cuts }: { onResult: (spec: WhatIfSp
         ))}
       </div>
       <div className={styles.chatExamples} aria-label="Example what-ifs">
-        {EXAMPLES.map((ex) => (
+        {examples.map((ex) => (
           <button key={ex} type="button" className={styles.chatChip} disabled={sending} onClick={() => send(ex)}>{ex}</button>
         ))}
       </div>

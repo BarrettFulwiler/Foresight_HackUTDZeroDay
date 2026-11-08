@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MonthSpend, Txn } from "../../lib/finance";
-import { KIND_LABEL, categoryMeta, money, shortDate, shortMonth } from "../../lib/format";
+import { KIND_LABEL, categoryMeta, longMonth, money, shortDate, shortMonth } from "../../lib/format";
 import { LIST_KEY } from "../../lib/prefs";
+import type { Display } from "../../lib/display";
+import GeminiFeedback from "./gemini-feedback";
 import styles from "./dashboard.module.css";
 
 const SIZE = 220;
@@ -12,8 +14,20 @@ const C = 2 * Math.PI * R;
 
 type Cat = ReturnType<typeof categoryMeta> & { key: string; amount: number; share: number };
 
-// windowSize = months per view (1 or 3, from onboarding), like the "Nov '20 - Jan '21" range in the reference.
-export default function SpendingDonut({ months, txns, windowSize = 3 }: { months: MonthSpend[]; txns: Txn[]; windowSize?: number }) {
+// windowSize = months per view (1 or 3, set on the Edit tab), like the "Nov '20 - Jan '21" range in the reference.
+// layout = donut chart with a category list, ranked bars, spending vs. monthly budget, or a table (set on the Edit tab).
+// budget = monthly budget per category: the user's Edit-tab budget, or their typical month if they haven't set one.
+// custom = categories whose budget the user set on the Edit tab (the rest use the typical month).
+export default function SpendingDonut({ months, txns, windowSize = 3, layout = "chart", budget = {}, custom = [], note, business = false }: {
+  months: MonthSpend[];
+  txns: Txn[];
+  windowSize?: number;
+  layout?: Display["spending"];
+  budget?: Record<string, number>;
+  custom?: string[];
+  note?: string; // e.g. that a company's earlier months are estimated
+  business?: boolean; // the company dashboard (Gemini is told it's a business)
+}) {
   const WINDOW = windowSize;
   const [end, setEnd] = useState(months.length - 1);
   const [hover, setHover] = useState<string | null>(null);
@@ -57,6 +71,8 @@ export default function SpendingDonut({ months, txns, windowSize = 3 }: { months
   const shown = hover ?? selected;
   const shownCat = view.cats.find((c) => c.key === shown);
   const selectedCat = view.cats.find((c) => c.key === selected);
+  // What Gemini is told: exactly what this card is showing, in whichever layout and period is on screen.
+  const facts = useMemo(() => spendingFacts({ view, layout, budget, custom, business, note, selected: selectedCat }), [view, layout, budget, custom, business, note, selectedCat]);
 
   function choose(key: string) {
     const next = selected === key ? null : key;
@@ -102,8 +118,51 @@ export default function SpendingDonut({ months, txns, windowSize = 3 }: { months
         {view.slice.length > 1
           ? `Totals for these ${view.slice.length} months. Income averages ${money(view.income / view.slice.length, false)} a month.`
           : "Totals for this month."}
+        {note ? ` ${note}` : ""}
       </p>
 
+      {layout === "bars" ? (
+        <RankedBars cats={view.cats} selected={selected} onChoose={choose} />
+      ) : layout === "budget" ? (
+        <BudgetBars cats={view.cats} months={view.slice.length} budget={budget} custom={custom} selected={selected} onChoose={choose} />
+      ) : layout === "table" ? (
+        <div className={styles.tableWrap}>
+          <table className={styles.dataTable}>
+            <caption className={styles.srOnly}>Spending by category. Select a category for details.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Category</th>
+                <th scope="col" className={styles.num}>Amount</th>
+                <th scope="col" className={styles.num}>Share</th>
+                {view.slice.length > 1 && <th scope="col" className={styles.num}>Per month</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {view.cats.map((c) => (
+                <tr key={c.key} className={selected === c.key ? styles.rowOn : undefined}>
+                  <th scope="row">
+                    <button type="button" className={styles.rowBtn} aria-pressed={selected === c.key} onClick={() => choose(c.key)}>
+                      <i style={{ background: c.color }} aria-hidden="true" />
+                      {c.label}
+                    </button>
+                  </th>
+                  <td className={`${styles.num} ${styles.neg}`}>-{money(c.amount)}</td>
+                  <td className={styles.num}>{(c.share * 100).toFixed(1)}%</td>
+                  {view.slice.length > 1 && <td className={styles.num}>{money(c.amount / view.slice.length)}</td>}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th scope="row">Total</th>
+                <td className={`${styles.num} ${styles.neg}`}>-{money(view.spending)}</td>
+                <td className={styles.num}>100%</td>
+                {view.slice.length > 1 && <td className={styles.num}>{money(view.spending / view.slice.length)}</td>}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      ) : (
       <div className={styles.donutRow}>
         <div className={styles.donutWrap}>
           <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className={styles.donut} role="group" aria-label="Spending by category. Select a slice for details.">
@@ -168,6 +227,7 @@ export default function SpendingDonut({ months, txns, windowSize = 3 }: { months
           ))}
         </ul>
       </div>
+      )}
 
       <div ref={detailRef} className={`${styles.reveal} ${selectedCat ? styles.revealOpen : ""}`} aria-live="polite">
         <div className={styles.revealInner}>
@@ -175,6 +235,8 @@ export default function SpendingDonut({ months, txns, windowSize = 3 }: { months
         </div>
       </div>
 
+      {layout === "chart" && (
+      <>
       <div className={styles.listHead}>
         <span>Categories <em>{view.cats.length}</em></span>
         <button type="button" className={styles.collapseBtn} aria-expanded={listOpen} aria-controls="category-list" onClick={toggleList}>
@@ -211,6 +273,127 @@ export default function SpendingDonut({ months, txns, windowSize = 3 }: { months
           </ul>
         </div>
       </div>
+      </>
+      )}
+
+      <GeminiFeedback facts={facts} topic="spending" label="Ask Gemini about this spending" placeholder="Ask Gemini about this spending" />
+    </div>
+  );
+}
+
+const LAYOUT_WORDS: Record<Display["spending"], string> = {
+  chart: "a donut chart of spending by category, with a list of categories",
+  bars: "ranked bars, one per category, biggest first",
+  budget: "each category's monthly spending against its monthly budget",
+  table: "a table of every category with its amount and share",
+};
+
+// The facts sent to Gemini for the Spending card (at most 20 sentences, every number as the card shows it).
+function spendingFacts({ view, layout, budget, custom, business, note, selected }: {
+  view: { slice: MonthSpend[]; prev: MonthSpend[]; first: string; last: string; income: number; spending: number; cats: Cat[] };
+  layout: Display["spending"];
+  budget: Record<string, number>;
+  custom: string[];
+  business: boolean;
+  note?: string;
+  selected?: Cat;
+}): string[] {
+  const r = (n: number) => money(n, false);
+  const n = Math.max(1, view.slice.length);
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const facts = [
+    business ? "This is a business's spending, from its business accounts." : "This is one person's spending, across their accounts at both banks.",
+    `The card shows ${LAYOUT_WORDS[layout]}.`,
+    n > 1 ? `The period is ${shortMonth(view.first)} to ${shortMonth(view.last)}, ${n} months.` : `The period is ${longMonth(view.first)}.`,
+    `Spending totals ${r(view.spending)} and income ${r(view.income)}${n > 1 ? ` (about ${r(view.income / n)} a month)` : ""}.`,
+    `Income minus spending, before loan payments, is ${view.income - view.spending < 0 ? "-" : ""}${r(Math.abs(view.income - view.spending))}.`,
+  ];
+  if (note) facts.push(note);
+  if (layout === "budget") {
+    facts.push(custom.length ? `Budgets are set for ${custom.length} of ${view.cats.length} categories; the rest use the typical month.` : "No budgets are set yet, so each category is compared with its typical month.");
+    for (const c of view.cats) {
+      if (budget[c.key] === undefined) continue;
+      const actual = c.amount / n;
+      const gap = actual - budget[c.key];
+      const state = Math.abs(gap) < 0.5 ? "on budget" : gap > 0 ? `${r(gap)} over` : `${r(-gap)} under`;
+      facts.push(`${c.label}: ${r(actual)} a month against a ${r(budget[c.key])} budget, ${state}.`);
+    }
+  } else {
+    for (const c of view.cats.slice(0, 5)) facts.push(`${c.label}: ${r(c.amount)}, ${pct(c.share)} of spending${n > 1 ? `, about ${r(c.amount / n)} a month` : ""}.`);
+    if (view.cats.length > 5) facts.push(`${view.cats.length - 5} smaller categories make up the rest.`);
+  }
+  if (selected) {
+    const prev = view.prev.reduce((t, m) => t + (m.byCategory[selected.key] ?? 0), 0);
+    const change = prev ? (selected.amount - prev) / prev : null;
+    facts.push(`They have ${selected.label} open: ${r(selected.amount)}, ${pct(selected.share)} of spending${change === null ? "" : `, ${change >= 0 ? "up" : "down"} ${pct(Math.abs(change))} from the ${view.prev.length === 1 ? "month" : `${view.prev.length} months`} before (${r(prev)})`}.`);
+  }
+  return facts.slice(0, 20);
+}
+
+// Every category as a horizontal bar, biggest first. Bars compare more easily than donut slices.
+function RankedBars({ cats, selected, onChoose }: { cats: Cat[]; selected: string | null; onChoose: (key: string) => void }) {
+  const top = cats[0]?.amount || 1;
+  return (
+    <ul className={styles.rankList} aria-label="Spending by category, biggest first. Select a category for details.">
+      {cats.map((c) => (
+        <li key={c.key}>
+          <button type="button" className={`${styles.rankRow} ${selected === c.key ? styles.rankOn : ""}`} aria-pressed={selected === c.key} onClick={() => onChoose(c.key)}>
+            <span className={styles.rankName}><i style={{ background: c.color }} aria-hidden="true" />{c.label}</span>
+            <span className={styles.rankTrack} aria-hidden="true"><span style={{ width: `${(c.amount / top) * 100}%`, background: c.color }} /></span>
+            <span className={styles.rankAmt}>{money(c.amount, false)}</span>
+            <span className={styles.rankPct}>{(c.share * 100).toFixed(1)}%</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Monthly spending per category against its monthly budget. The tick marks the budget; red means over.
+function BudgetBars({ cats, months, budget, custom, selected, onChoose }: { cats: Cat[]; months: number; budget: Record<string, number>; custom: string[]; selected: string | null; onChoose: (key: string) => void }) {
+  const rows = cats
+    .filter((c) => budget[c.key] !== undefined)
+    .map((c) => ({ ...c, actual: c.amount / Math.max(1, months), plan: budget[c.key] }));
+  const over = rows.filter((r) => r.actual > r.plan + 0.5);
+  return (
+    <div className={styles.vsBudget}>
+      <p className={styles.vsSummary}>
+        {months > 1 ? "Monthly average for these months vs. your monthly budget. " : "This month vs. your monthly budget. "}
+        {over.length ? <strong className={styles.neg}>{over.length} of {rows.length} categories over budget.</strong> : <strong className={styles.pos}>Every category is within budget.</strong>}
+      </p>
+      {custom.length === 0 && (
+        <p className={styles.vsEmpty}>
+          You haven&rsquo;t set any budgets yet, so each category is compared with your typical month (your last 3 months). Set budgets on the Edit tab to see where you&rsquo;re over.
+        </p>
+      )}
+      <ul className={styles.rankList} aria-label="Spending vs. monthly budget by category. Select a category for details.">
+        {rows.map((r) => {
+          const scale = Math.max(r.actual, r.plan) || 1;
+          const isOver = r.actual > r.plan + 0.5;
+          const gap = Math.abs(r.actual - r.plan);
+          const even = gap < 0.5;
+          return (
+            <li key={r.key}>
+              <button
+                type="button"
+                className={`${styles.rankRow} ${styles.vsRow} ${selected === r.key ? styles.rankOn : ""}`}
+                aria-pressed={selected === r.key}
+                aria-label={`${r.label}: ${money(r.actual, false)} a month against a ${money(r.plan, false)} ${custom.includes(r.key) ? "budget" : "typical month"}, ${even ? "on budget" : isOver ? `${money(gap, false)} over` : `${money(gap, false)} under`}. Show details.`}
+                onClick={() => onChoose(r.key)}
+              >
+                <span className={styles.rankName}><i style={{ background: r.color }} aria-hidden="true" />{r.label}</span>
+                <span className={styles.rankTrack} aria-hidden="true">
+                  <span className={isOver ? styles.vsOver : styles.vsUnder} style={{ width: `${(r.actual / scale) * 100}%` }} />
+                  <b className={styles.vsMark} style={{ left: `${(r.plan / scale) * 100}%` }} />
+                </span>
+                <span className={styles.rankAmt}>{money(r.actual, false)} <small>of {money(r.plan, false)}</small></span>
+                <span className={`${styles.rankPct} ${even ? "" : isOver ? styles.neg : styles.pos}`}>{even ? "On budget" : isOver ? `+${money(gap, false)} over` : `${money(gap, false)} under`}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {custom.length > 0 && <p className={styles.vsNote}>Budgets come from the Edit tab. Categories you haven&rsquo;t edited use your typical month.</p>}
     </div>
   );
 }

@@ -70,6 +70,11 @@ const CATEGORY_WORDS: Record<string, string> = {
   dining: "dining", eating: "dining", restaurant: "dining", takeout: "dining", coffee: "dining",
   shopping: "shopping", clothes: "shopping", groceries: "groceries", grocery: "groceries",
   transport: "transport", gas: "transport", utilities: "utilities", housing: "housing", rent: "housing",
+  // Company categories (lib/company-dashboard.ts). Only categories the customer actually has are kept.
+  marketing: "marketing", advertising: "marketing", payroll: "payroll", software: "software", hosting: "software",
+  telecom: "software", supplies: "supplies", inventory: "supplies", fuel: "fuel_equipment", equipment: "fuel_equipment",
+  legal: "professional", insurance: "professional", accounting: "professional", facilities: "facilities",
+  shipping: "shipping_travel", freight: "shipping_travel", travel: "shipping_travel",
 };
 
 /** Rule-based parser used when Gemini isn't configured (or doesn't answer) — and as a sanity shape for what Gemini returns. */
@@ -244,7 +249,9 @@ export function buildCustomPlan(spec: WhatIfSpec, accounts: Account[], schedule:
     steps.push(`Move ${r(bridge)} from Capital One Savings to PNC Checking now, to get past the next two months of bills.`);
   }
   if (savingsStep) steps.push(savingsStep);
-  const planCuts = spec.oneOffAmount && spec.oneOffAmount >= 500 ? { dining: 75, shopping: 75 } : undefined;
+  // Only suggest the dining/shopping trim when those categories exist (a company's schedule has neither).
+  const hasDiscretionary = schedule.some((e) => e.category === "dining") && schedule.some((e) => e.category === "shopping");
+  const planCuts = hasDiscretionary && spec.oneOffAmount && spec.oneOffAmount >= 500 ? { dining: 75, shopping: 75 } : undefined;
   if (planCuts) steps.push("Trim dining and shopping by $75 each a month ($150 a month) to build the savings back up.");
   steps.push(`Turn on automatic top-ups: PNC Savings refills checking whenever it would drop below ${r(FLOOR)}.`);
 

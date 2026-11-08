@@ -12,9 +12,10 @@ const dayBefore = (ymd: string) => {
 };
 
 export type PresetId = "trip" | "payoff" | "emergency";
+export type BusinessPresetId = "slow" | "equipment" | "cardpayoff"; // lib/business-plans.ts
 export type NowMove = { fromId: string; toId: string; amount: number; label: string }; // app account ids
 export type Plan = {
-  id: PresetId;
+  id: PresetId | BusinessPresetId;
   want: string;
   warnings: string[];
   steps: string[];
@@ -34,7 +35,7 @@ export const FLOOR = 200; // keep checking above this
 const TOP_UP_TO = 1000;
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const shortDay = (iso: string) => `${MONTH[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
-const addDays = (iso: string, n: number) => new Date(Date.parse(iso) + n * 86400000).toISOString().slice(0, 10);
+export const addDays = (iso: string, n: number) => new Date(Date.parse(iso) + n * 86400000).toISOString().slice(0, 10);
 const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
 const r = (n: number) => money(n, false);
 
@@ -50,7 +51,7 @@ export function compareRows(asIs: Forecast, withPlan: Forecast, cardIds: string[
   ];
 }
 
-function low(f: Forecast, days: number) {
+export function low(f: Forecast, days: number) {
   const pts = f.checkingDaily.slice(0, days);
   return pts.reduce((lo, p) => (p.balance < lo.balance ? p : lo), pts[0]);
 }

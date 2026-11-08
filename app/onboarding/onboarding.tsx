@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { BRAND } from "../../lib/brand";
 import { categoryMeta, longMonth, money, shortMonth } from "../../lib/format";
 import { markDemo } from "../../lib/auth-client";
-import { DEMO_PREFS, GOAL_OPTIONS, type GoalKind, type Prefs, monthsUntil, savePrefs } from "../../lib/prefs";
+import { DEMO_BUSINESS_PREFS, DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, monthsUntil, savePrefs } from "../../lib/prefs";
 import type { Summary } from "../../lib/summary";
 import DatePicker, { formatDate } from "./date-picker";
 import styles from "./onboarding.module.css";
@@ -36,12 +36,15 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [p, setP] = useState<Prefs>(BLANK);
+  const [demo, setDemo] = useState(false);
 
-  // ?demo=1 pre-fills every step; otherwise start from what the sign-up form passed along.
+  // ?demo=1 ("Try the demo") starts here with every step pre-filled, so the visitor picks personal or business
+  // and clicks through. Otherwise start from what the sign-up form passed along.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("demo")) {
       markDemo(); // lets the demo into the dashboard without an account
-      setP(DEMO_PREFS);
+      setDemo(true);
+      setP({ ...DEMO_PREFS, completedAt: "" });
       return;
     }
     try {
@@ -53,6 +56,17 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   const set = <K extends keyof Prefs>(k: K, v: Prefs[K]) => setP((cur) => ({ ...cur, [k]: v }));
   const setGoal = (g: Partial<Prefs["goal"]>) => setP((cur) => ({ ...cur, goal: { ...cur.goal, ...g } }));
   const setConsent = (c: Partial<Prefs["consent"]>) => setP((cur) => ({ ...cur, consent: { ...cur.consent, ...c } }));
+  // Personal and business goals are different lists, so switching who it's for clears the goals picked so far.
+  // In the demo, switching fills in that type's demo goals instead, so every step stays ready to click through.
+  const demoFor = (accountType: Prefs["accountType"]) => (accountType === "company" ? DEMO_BUSINESS_PREFS : DEMO_PREFS);
+  const setType = (accountType: Prefs["accountType"]) =>
+    setP((cur) => {
+      if (cur.accountType === accountType) return cur;
+      const goals = demo ? { goals: demoFor(accountType).goals, goal: demoFor(accountType).goal } : { goals: [], goal: BLANK.goal };
+      return { ...cur, accountType, ...goals };
+    });
+  const business = p.accountType === "company";
+  const options = goalOptionsFor(p.accountType);
 
   const valid = [
     true,
@@ -64,13 +78,13 @@ export default function Onboarding({ summary }: { summary: Summary }) {
 
   function finish(prefs: Prefs) {
     savePrefs({ ...prefs, completedAt: new Date().toISOString() });
-    router.push("/dashboard?welcome=1");
+    router.push(prefs.accountType === "company" ? "/dashboard/company" : "/dashboard?welcome=1");
   }
 
   function toggleGoal(kind: GoalKind) {
     setP((cur) => {
       const goals = cur.goals.includes(kind) ? cur.goals.filter((g) => g !== kind) : [...cur.goals, kind];
-      const example = (k: GoalKind) => GOAL_OPTIONS.find((o) => o.kind === k)?.example ?? "";
+      const example = (k: GoalKind) => goalOption(k)?.example ?? "";
       const main = goals.includes(cur.goal.kind) ? cur.goal : { ...cur.goal, kind: goals[0] ?? kind, label: example(goals[0] ?? kind) };
       return { ...cur, goals, goal: main.label ? main : { ...main, label: example(main.kind) } };
     });
@@ -87,10 +101,9 @@ export default function Onboarding({ summary }: { summary: Summary }) {
     <main className={styles.page}>
       <header className={styles.top}>
         <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
-        <button type="button" className={styles.skip} onClick={() => {
-          markDemo();
-          finish({ ...DEMO_PREFS, name: p.name || DEMO_PREFS.name });
-        }}>Skip, use demo profile</button>
+        <button type="button" className={styles.skip} onClick={() => { markDemo(); finish({ ...demoFor(p.accountType), name: p.name || DEMO_PREFS.name }); }}>
+          {demo ? `Skip to the ${p.accountType === "company" ? "company" : "personal"} dashboard` : "Skip, use demo profile"}
+        </button>
       </header>
 
       <div className={styles.flow}>
@@ -105,10 +118,12 @@ export default function Onboarding({ summary }: { summary: Summary }) {
           {step === 0 && (
             <>
               <h1 className={styles.stepTitle}>{p.name ? `Hi ${p.name}! ` : ""}Who is this for?</h1>
-              <p className={styles.stepSub}>We&rsquo;ll tailor what you see to how you use money.</p>
+              <p className={styles.stepSub}>
+                {demo ? "Demo: pick personal or business. Every step is already filled in, so just press Continue." : "We’ll tailor what you see to how you use money."}
+              </p>
               <div className={styles.choices} role="radiogroup" aria-label="Account type">
-                <Choice checked title="Just me" text="My own accounts, bills and goals." onSelect={() => set("accountType", "individual")} />
-                <Choice checked={false} disabled title="My company" text="Business accounts and payroll." tag="Coming soon" onSelect={() => {}} />
+                <Choice checked={p.accountType === "individual"} title="Just me" text="My own accounts, bills and goals." onSelect={() => setType("individual")} />
+                <Choice checked={p.accountType === "company"} title="My company" text="Business accounts, loans and cash on hand." onSelect={() => setType("company")} />
               </div>
             </>
           )}
@@ -163,10 +178,12 @@ export default function Onboarding({ summary }: { summary: Summary }) {
 
           {step === 3 && (
             <>
-              <h1 className={styles.stepTitle}>What are you working toward?</h1>
-              <p className={styles.stepSub}>Pick any that apply. Future-you keeps an eye on these.</p>
-              <div className={styles.chips} role="group" aria-label="Goals">
-                {GOAL_OPTIONS.map((g) => (
+              <h1 className={styles.stepTitle}>{business ? "What is the business working toward?" : "What are you working toward?"}</h1>
+              <p className={styles.stepSub}>
+                {business ? "Pick any that apply. Future-you watches the company's cash flow against these." : "Pick any that apply. Future-you keeps an eye on these."}
+              </p>
+              <div className={styles.chips} role="group" aria-label={business ? "Business goals" : "Goals"}>
+                {options.map((g) => (
                   <button key={g.kind} type="button" aria-pressed={p.goals.includes(g.kind)} className={p.goals.includes(g.kind) ? styles.chipOn : styles.chip} onClick={() => toggleGoal(g.kind)}>
                     {g.label}
                   </button>
@@ -174,20 +191,20 @@ export default function Onboarding({ summary }: { summary: Summary }) {
               </div>
               {p.goals.length > 0 && (
                 <div className={styles.goalBox}>
-                  <p className={styles.groupLabel}>Your main goal</p>
+                  <p className={styles.groupLabel}>{business ? "The company's main goal" : "Your main goal"}</p>
                   <div className={styles.goalGrid}>
                     <label className={styles.field}>Goal
-                      <select value={p.goal.kind} onChange={(e) => { const kind = e.target.value as GoalKind; setGoal({ kind, label: GOAL_OPTIONS.find((o) => o.kind === kind)?.example ?? "" }); }}>
-                        {p.goals.map((k) => <option key={k} value={k}>{GOAL_OPTIONS.find((o) => o.kind === k)?.label}</option>)}
+                      <select value={p.goal.kind} onChange={(e) => { const kind = e.target.value as GoalKind; setGoal({ kind, label: goalOption(kind)?.example ?? "" }); }}>
+                        {p.goals.map((k) => <option key={k} value={k}>{goalOption(k)?.label}</option>)}
                       </select>
                     </label>
                     <label className={styles.field}>Name it
-                      <input value={p.goal.label} onChange={(e) => setGoal({ label: e.target.value })} placeholder="Trip to Cancún" />
+                      <input value={p.goal.label} onChange={(e) => setGoal({ label: e.target.value })} placeholder={business ? "3-month operating reserve" : "Trip to Cancún"} />
                     </label>
                     <label className={styles.field}>Target ($)
-                      <input inputMode="numeric" value={p.goal.target || ""} onChange={(e) => setGoal({ target: Number(e.target.value.replace(/\D/g, "")) })} placeholder="1500" />
+                      <input inputMode="numeric" value={p.goal.target || ""} onChange={(e) => setGoal({ target: Number(e.target.value.replace(/\D/g, "")) })} placeholder={business ? "150000" : "1500"} />
                     </label>
-                    <label className={styles.field}>Saved so far ($)
+                    <label className={styles.field}>{business ? "Set aside so far ($)" : "Saved so far ($)"}
                       <input inputMode="numeric" value={p.goal.saved || ""} onChange={(e) => setGoal({ saved: Number(e.target.value.replace(/\D/g, "")) })} placeholder="0" />
                     </label>
                     <div className={styles.field}>
@@ -210,8 +227,17 @@ export default function Onboarding({ summary }: { summary: Summary }) {
               <h1 className={styles.stepTitle}>You&rsquo;re in control</h1>
               <p className={styles.stepSub}>Choose what {BRAND} can do. You can change these anytime.</p>
               <div className={styles.consents}>
-                <Consent checked={p.consent.pnc} required title="Connect my PNC accounts" text="Read-only access to balances and transactions, so we can build your full picture." onChange={(v) => setConsent({ pnc: v })} />
-                <Consent checked={p.consent.capitalOne} title="Connect my Capital One accounts" text="Through Capital One's Nessie API, so you can see and move money across both banks." onChange={(v) => setConsent({ capitalOne: v })} />
+                {business ? (
+                  <>
+                    <Consent checked={p.consent.pnc} required title="Connect the company's PNC business accounts" text="Read-only access to business balances, loans and transactions, so we can build the company's full picture. I'm authorized to share them." onChange={(v) => setConsent({ pnc: v })} />
+                    <Consent checked={p.consent.capitalOne} title="Connect the company's Capital One business accounts" text="Through Capital One's Nessie API, so you can see and move the company's money across both banks." onChange={(v) => setConsent({ capitalOne: v })} />
+                  </>
+                ) : (
+                  <>
+                    <Consent checked={p.consent.pnc} required title="Connect my PNC accounts" text="Read-only access to balances and transactions, so we can build your full picture." onChange={(v) => setConsent({ pnc: v })} />
+                    <Consent checked={p.consent.capitalOne} title="Connect my Capital One accounts" text="Through Capital One's Nessie API, so you can see and move money across both banks." onChange={(v) => setConsent({ capitalOne: v })} />
+                  </>
+                )}
                 <Consent checked={p.consent.disclaimer} required title="I understand this is a prototype" text="It uses synthetic data, and nothing here is financial advice. Every number is calculated by code before AI explains it." onChange={(v) => setConsent({ disclaimer: v })} />
               </div>
             </>

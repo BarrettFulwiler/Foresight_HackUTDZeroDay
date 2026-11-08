@@ -69,6 +69,18 @@ export function createTransfer(fromId: string, toId: string, amountCents: number
 // once-a-minute sweep, so callers should poll getTransaction until it completes.
 export const settleEarly = (id: string) => call<NessieTxn>(`/transactions/${id}/settle`, { method: "POST" });
 
+/** A GET for routes this file doesn't wrap yet (used by lib/companies.ts). Waits and retries when Nessie rate-limits. */
+export async function nessieGet<T>(path: string): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call<T>(path);
+    } catch (e) {
+      if (!(e instanceof NessieError) || e.status !== 429 || attempt >= 3) throw e;
+      await new Promise((ok) => setTimeout(ok, 700 * (attempt + 1)));
+    }
+  }
+}
+
 // ---------- Customers for signed-up users (see lib/auth.ts) ----------
 type Address = { street_number: string; street_name: string; city: string; state: string; zip: string };
 // Nessie requires an address, but sign-up doesn't ask for one, so new customers get a placeholder until they add theirs.
