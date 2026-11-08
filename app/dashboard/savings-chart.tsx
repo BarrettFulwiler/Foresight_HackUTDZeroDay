@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Point } from "../../lib/finance";
 import { longMonth, money, shortMonth } from "../../lib/format";
+import type { Display } from "../../lib/display";
 import styles from "./dashboard.module.css";
 
 const RANGES = { "6M": 6, "1Y": 12, "2Y": 24 } as const;
@@ -115,7 +116,54 @@ function GeminiFeedback({ facts }: { facts: string[] }) {
   );
 }
 
-export default function SavingsChart({ points, topUps }: { points: Point[]; topUps?: { total: number; count: number } }) {
+// Each month's gain or loss as a green or red bar around a zero line. Hovering a bar shows that month above.
+function ChangeBars({ pts, hover, onHover }: { pts: Point[]; hover: number | null; onHover: (i: number | null) => void }) {
+  const bars = pts.slice(1).map((p, i) => ({ i: i + 1, month: p.month, d: p.value - pts[i].value }));
+  const lo = Math.min(0, ...bars.map((b) => b.d));
+  const hi = Math.max(0, ...bars.map((b) => b.d));
+  const span = hi - lo || 1;
+  const top = PAD.top + 10;
+  const bottom = H - PAD.bottom - 10;
+  const y = (v: number) => top + ((hi - v) / span) * (bottom - top);
+  const band = (W - PAD.left - PAD.right) / Math.max(1, bars.length);
+  const labelEvery = Math.ceil(bars.length / 6);
+  const gains = bars.filter((b) => b.d >= 0).length;
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className={styles.lineChart}
+      role="img"
+      aria-label={`Monthly change in balance: ${gains} months up, ${bars.length - gains} down`}
+      onPointerLeave={() => onHover(null)}
+    >
+      <line x1={PAD.left} x2={W - PAD.right} y1={y(0)} y2={y(0)} className={styles.zeroLine} />
+      {bars.map((b, k) => {
+        const x = PAD.left + k * band + band * 0.18;
+        const y0 = y(Math.max(0, b.d));
+        const h = Math.max(1.5, Math.abs(y(b.d) - y(0)));
+        const lit = hover === b.i;
+        return (
+          <g key={b.month} onPointerEnter={() => onHover(b.i)}>
+            <rect x={PAD.left + k * band} y={top} width={band} height={bottom - top} fill="transparent" />
+            <rect x={x} y={y0} width={band * 0.64} height={h} rx={3} className={b.d >= 0 ? styles.gainBar : styles.lossBar} opacity={hover !== null && !lit ? 0.4 : 1}>
+              <title>{`${shortMonth(b.month)}: ${b.d >= 0 ? "+" : "-"}${money(Math.abs(b.d))}`}</title>
+            </rect>
+            {(k % labelEvery === 0 || k === bars.length - 1) && (bars.length - 1 - k >= labelEvery || k === bars.length - 1) && (
+              <text x={x + band * 0.32} y={H - 8} textAnchor="middle" className={styles.axisLabel}>{shortMonth(b.month)}</text>
+            )}
+          </g>
+        );
+      })}
+      {hover !== null && hover > 0 && (
+        <text x={PAD.left + (hover - 1) * band + band / 2} y={bars[hover - 1].d >= 0 ? y(bars[hover - 1].d) - 6 : y(bars[hover - 1].d) + 16} textAnchor="middle" className={styles.barValue}>
+          {bars[hover - 1].d >= 0 ? "+" : "-"}{money(Math.abs(bars[hover - 1].d), false)}
+        </text>
+      )}
+    </svg>
+  );
+}
+
+export default function SavingsChart({ points, topUps, layout = "chart" }: { points: Point[]; topUps?: { total: number; count: number }; layout?: Display["history"] }) {
   const [range, setRange] = useState<Range>("1Y");
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -181,6 +229,31 @@ export default function SavingsChart({ points, topUps }: { points: Point[]; topU
         {change >= 0 ? "▲" : "▼"} {money(Math.abs(change))} ({changePct >= 0 ? "+" : ""}{changePct.toFixed(1)}%) since {shortMonth(pts[0].month)}
       </p>
 
+      {layout === "table" ? (
+        <div className={`${styles.tableWrap} ${styles.tableScroll}`}>
+          <table className={styles.dataTable}>
+            <caption className={styles.srOnly}>Balances by month, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Month</th>
+                <th scope="col" className={styles.num}>Balance</th>
+                <th scope="col" className={styles.num}>Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pts.map((p, i) => ({ p, d: i ? p.value - pts[i - 1].value : null })).reverse().map(({ p, d }) => (
+                <tr key={p.month}>
+                  <th scope="row">{longMonth(p.month)}</th>
+                  <td className={styles.num}>{money(p.value)}</td>
+                  <td className={`${styles.num} ${d === null ? styles.tableMuted : d >= 0 ? styles.pos : styles.neg}`}>{d === null ? "—" : `${d >= 0 ? "+" : "-"}${money(Math.abs(d))}`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : layout === "change" ? (
+        <ChangeBars pts={pts} hover={hover} onHover={setHover} />
+      ) : (
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
@@ -216,6 +289,7 @@ export default function SavingsChart({ points, topUps }: { points: Point[]; topU
         )}
         <circle cx={x(pts.length - 1)} cy={y(pts.at(-1)!.value)} r={4.5} className={styles.endDot} />
       </svg>
+      )}
       <GeminiFeedback facts={facts} />
       {topUps && topUps.total > 0 && (
         <p className={styles.chartNote}>
