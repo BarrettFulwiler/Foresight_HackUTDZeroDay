@@ -898,3 +898,14 @@
 .fFix > div:first-child {
   flex: 1 1 210px;
 }
+
+/* Tinted outlines, matching the dashboard cards (a thick left border bends into a crescent on rounded corners). */
+.fWarn {
+  border-left: 0;
+  border: 1.5px solid color-mix(in srgb, #dc2626 45%, transparent);
+}
+
+.fFix {
+  border-left: 0;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
