@@ -80,3 +80,21 @@ export async function nessieGet<T>(path: string): Promise<T> {
     }
   }
 }
+
+// ---------- Customers for signed-up users (see lib/auth.ts) ----------
+type Address = { street_number: string; street_name: string; city: string; state: string; zip: string };
+// Nessie requires an address, but sign-up doesn't ask for one, so new customers get a placeholder until they add theirs.
+const PLACEHOLDER_ADDRESS: Address = { street_number: "0", street_name: "Not provided", city: "Not provided", state: "TX", zip: "00000" };
+
+export const createCustomer = (firstName: string, lastName: string) =>
+  call<{ id: string }>("/customers", { method: "POST", body: JSON.stringify({ first_name: firstName, last_name: lastName, address: PLACEHOLDER_ADDRESS }) });
+
+export const openAccount = (customerId: string, type: "Checking" | "Savings", nickname: string) =>
+  call<NessieAccount>(`/customers/${customerId}/accounts`, { method: "POST", body: JSON.stringify({ type, nickname, balance_cents: 0 }) });
+
+/** Removes a customer and its accounts. Used to undo a sign-up that failed halfway. */
+export async function deleteCustomer(customerId: string) {
+  const accounts = await listCustomerAccounts(customerId).catch(() => [] as NessieAccount[]);
+  for (const a of accounts) await call(`/accounts/${a.id}`, { method: "DELETE" }).catch(() => {});
+  await call(`/customers/${customerId}`, { method: "DELETE" }).catch(() => {});
+}

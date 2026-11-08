@@ -2199,20 +2199,6 @@
   }
 }
 
-/* Sign in / Sign out next to the avatar */
-.signOut {
-  padding: 8px 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--panel);
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 650;
-  text-decoration: none;
-  cursor: pointer;
-}
-.signOut:hover { border-color: var(--ink); }
 /* ---------- Edit tab: Display settings ---------- */
 .displayList {
   list-style: none;
@@ -3172,3 +3158,18 @@
     width: 100%;
   }
 }
+
+/* Sign in / Sign out next to the avatar, on the slate nav bar */
+.signOut {
+  padding: 6px 12px;
+  border: 1px solid #ffffff59;
+  border-radius: 999px;
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+}
+.signOut:hover { border-color: #ffffff; background: #ffffff14; }

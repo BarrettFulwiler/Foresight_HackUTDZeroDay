@@ -65,7 +65,7 @@ export const DEMO_BUSINESS_PREFS: Prefs = {
   ...DEMO_PREFS,
   accountType: "company",
   goals: ["reserve", "payroll"],
-  goal: { kind: "reserve", label: "3-month operating reserve", target: 150000, saved: 40000, by: "2027-06" },
+  goal: { kind: "reserve", label: "3-month operating reserve", target: 150000, saved: 40000, by: "2027-06-30" },
 };
 
 const KEY = "foresight.prefs";

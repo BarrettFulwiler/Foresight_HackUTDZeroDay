@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "../../lib/brand";
 import { categoryMeta, longMonth, money, shortMonth } from "../../lib/format";
+import { markDemo } from "../../lib/auth-client";
 import { DEMO_BUSINESS_PREFS, DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, monthsUntil, savePrefs } from "../../lib/prefs";
 import type { Summary } from "../../lib/summary";
 import DatePicker, { formatDate } from "./date-picker";
@@ -41,6 +42,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   // and clicks through. Otherwise start from what the sign-up form passed along.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("demo")) {
+      markDemo(); // lets the demo into the dashboard without an account
       setDemo(true);
       setP({ ...DEMO_PREFS, completedAt: "" });
       return;
@@ -99,7 +101,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
     <main className={styles.page}>
       <header className={styles.top}>
         <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
-        <button type="button" className={styles.skip} onClick={() => finish({ ...demoFor(p.accountType), name: p.name || DEMO_PREFS.name })}>
+        <button type="button" className={styles.skip} onClick={() => { markDemo(); finish({ ...demoFor(p.accountType), name: p.name || DEMO_PREFS.name }); }}>
           {demo ? `Skip to the ${p.accountType === "company" ? "company" : "personal"} dashboard` : "Skip, use demo profile"}
         </button>
       </header>

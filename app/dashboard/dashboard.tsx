@@ -40,7 +40,7 @@ const GIVE_UP_MS = 3 * 60 * 1000;
 const BUDGETS_KEY = "foresight.budgets";
 
 // company: set on /dashboard/company. The same dashboard then runs on that company's Nessie data (lib/company-dashboard.ts).
-export default function Dashboard({ data, source: initialSource, sourceError, company }: { data: DashboardData; source: Source; sourceError?: string; company?: CompanyInfo }) {
+export default function Dashboard({ data, source: initialSource, sourceError, company, member }: { data: DashboardData; source: Source; sourceError?: string; company?: CompanyInfo; member?: { name: string; type: "individual" | "company" } }) {
   const [tab, setTab] = useState<Tab>("View");
   const latest = data.months.at(-1)!;
   const { prefs, ready } = usePrefs();
@@ -143,9 +143,9 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
   const who = company
     ? { title: company.name, sub: `${company.industry} · ${company.city} · live from Nessie`, initial: company.name.slice(0, 1).toUpperCase() }
     : {
-        title: `Welcome back${prefs?.name ? `, ${prefs.name}` : ""}`,
-        sub: `Synthetic profile ${data.customerId} · as of ${data.asOf}`,
-        initial: (prefs?.name || data.customerId).slice(0, 1).toUpperCase(),
+        title: `Welcome back${member ? `, ${member.name.split(" ")[0]}` : prefs?.name ? `, ${prefs.name}` : ""}`,
+        sub: `${member ? "Signed in · " : ""}Synthetic profile ${data.customerId} · as of ${data.asOf}`,
+        initial: (member?.name || prefs?.name || data.customerId).slice(0, 1).toUpperCase(),
       };
   const estimated = "Before this month, history is estimated from the company's recent Nessie activity.";
   // Cards this dashboard has (the credit score is personal only), minus the ones hidden on the Edit tab.
@@ -171,6 +171,13 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
               <p className={styles.navSub}>{who.sub}</p>
             </div>
             <a className={styles.avatar} href="/onboarding" title="Change your setup" aria-label="Change your setup">{who.initial}</a>
+            {member ? (
+              <SignOutButton redirectUrl="/">
+                <button type="button" className={styles.signOut}>Sign out</button>
+              </SignOutButton>
+            ) : (
+              <a className={styles.signOut} href="/start?mode=signin">Sign in</a>
+            )}
           </div>
         </div>
       </header>

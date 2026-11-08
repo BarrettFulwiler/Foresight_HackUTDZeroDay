@@ -75,9 +75,10 @@ export function buildBusinessPlan(id: BusinessPresetId, accounts: Account[], sch
   if (id === "equipment") {
     const liquid = base.liquidNow;
     const amount = goal?.kind === "equipment" && goal.target > 0 ? goal.target : Math.max(10_000, roundTo(liquid * 0.1, 5000));
-    const ym = goal?.kind === "equipment" && goal.by ? goal.by : nextMonth(asOf, 1);
+    const by = goal?.kind === "equipment" && goal.by ? goal.by : nextMonth(asOf, 1);
+    const ym = by.slice(0, 7);
     const label = goal?.kind === "equipment" && goal.label ? goal.label : "Equipment";
-    const date = `${ym}-10`;
+    const date = by.length === 10 ? by : `${ym}-10`; // a full day from the date picker, or the 10th for older month-only goals
     const buy: ExtraEvent[] = [{ date, accountId: checking.id, delta: -amount, label }];
     const asIs = run({ extra: buy });
     // Move only what keeps the operating account above the cushion from the purchase on (often nothing).
