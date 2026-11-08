@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { NessieError, createTransfer, getAccount, settleEarly } from "../../../../lib/nessie";
-import { linkedNessieIds } from "../../../../lib/live-accounts";
+import { invalidateLiveBalances, linkedNessieIds } from "../../../../lib/live-accounts";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
 
     const txn = await createTransfer(fromId, toId, cents, (note || "Moved with Foresight").slice(0, 120));
     await settleEarly(txn.id).catch(() => undefined); // best effort: shortens the wait, the sweep still settles it
+    invalidateLiveBalances(); // the hold on the sending account should show on the next read
     const body = { transaction: txn, fromBalanceBefore: from.balance_cents / 100 };
     if (requestId) recent.set(requestId, { at: now, body });
     return NextResponse.json(body);

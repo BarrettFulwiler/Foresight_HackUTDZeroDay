@@ -183,7 +183,9 @@
 
 .heroArt {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
 /* ---------- Phone mockup ---------- */
@@ -573,4 +575,337 @@
   .secondary {
     transition: none;
   }
+}
+
+/* ---------- Two futures card (hero) ---------- */
+.futures {
+  margin: 0;
+  width: min(100%, 420px);
+  display: grid;
+  gap: 10px;
+  padding: 22px 22px 20px;
+  background: var(--card);
+  border-radius: 28px;
+  border: 1px solid var(--line);
+  box-shadow: 0 30px 80px #0e17261f, 0 2px 6px #0e17260d;
+  text-align: left;
+}
+
+.fLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.fWant {
+  margin: -4px 0 2px;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.fChart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.fZone {
+  fill: #fee2e2;
+  opacity: 0.65;
+}
+
+.fZero {
+  stroke: #ef4444;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.fAxis,
+.fAxisZero,
+.fDotLabel {
+  font-size: 11px;
+  fill: #98a2b3;
+}
+
+.fAxisZero {
+  font-weight: 700;
+  fill: #dc2626;
+}
+
+.fDotLabel {
+  font-weight: 700;
+  fill: #b91c1c;
+}
+
+.fDot {
+  fill: #dc2626;
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.fLine {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.fRed {
+  stroke: #dc2626;
+  animation: fDraw 1.4s ease-out 0.3s forwards;
+}
+
+.fBlue {
+  stroke: var(--accent);
+  stroke-width: 3;
+  animation: fDraw 1.2s ease-out 2s forwards;
+}
+
+.fLegend {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fSwRed,
+.fSwBlue {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: #dc2626;
+}
+
+.fSwBlue {
+  background: var(--accent);
+}
+
+.fWarn {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fef2f2;
+  border-left: 4px solid #dc2626;
+}
+
+.fWarn p:last-child,
+.fFix p:last-child {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.fFix {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #eef2ff;
+  border-left: 4px solid var(--accent);
+  opacity: 0;
+  animation: fPop 0.4s ease-out 2.2s forwards;
+}
+
+.fFix > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.fAction {
+  display: grid;
+  flex: none;
+}
+
+.fApply,
+.fDone {
+  grid-area: 1 / 1;
+  justify-self: end;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.fApply {
+  color: #fff;
+  background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  animation: fGone 0.3s ease-in 3.6s forwards;
+}
+
+.fDone {
+  color: #15803d;
+  background: #dcfce7;
+  opacity: 0;
+  animation: fPop 0.4s ease-out 3.8s forwards;
+}
+
+.fOutcome {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #15803d;
+}
+
+.fPop {
+  opacity: 0;
+  animation: fPop 0.4s ease-out 1.6s forwards;
+}
+
+.fLate {
+  opacity: 0;
+  animation: fPop 0.4s ease-out 4.1s forwards;
+}
+
+.fCaption {
+  margin: 0;
+  max-width: 420px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@keyframes fDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fPop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fGone {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* ---------- Warning card (guard section) ---------- */
+.warnCard {
+  margin: 0;
+  width: min(100%, 380px);
+  justify-self: center;
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+  background: var(--card);
+  border-radius: 24px;
+  border: 2px solid #fecaca;
+  box-shadow: 0 20px 50px #0e172614;
+}
+
+.warnDotBad,
+.warnDotGood {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #dc2626;
+}
+
+.warnDotGood {
+  background: #16a34a;
+}
+
+.warnValue {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: #b91c1c;
+}
+
+.warnSub {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.warnFoot {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fLine {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+
+  .fPop,
+  .fLate,
+  .fFix,
+  .fDone {
+    opacity: 1;
+    animation: none;
+  }
+
+  .fApply {
+    display: none;
+  }
+}
+
+.fDotStem {
+  stroke: #dc2626;
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.fDotLabel,
+.fAxisZero {
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.fFix {
+  flex-wrap: wrap;
+}
+
+.fFix > div:first-child {
+  flex: 1 1 210px;
+}
+
+/* Tinted outlines, matching the dashboard cards (a thick left border bends into a crescent on rounded corners). */
+.fWarn {
+  border-left: 0;
+  border: 1.5px solid color-mix(in srgb, #dc2626 45%, transparent);
+}
+
+.fFix {
+  border-left: 0;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }

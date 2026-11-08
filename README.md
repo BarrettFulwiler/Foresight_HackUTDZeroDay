@@ -52,7 +52,7 @@ Gemini never does the math. `lib/explain.ts` turns the plan into a list of calcu
 - Sign-in is not connected to a back end yet; the demo user is hardcoded to customer C005.
 - Balances for the 6 linked accounts are live from Nessie, and the Move tab makes real Nessie transfers with receipts. PNC's history and analysis still come from PNC's CSVs.
 - `lib/forecast.ts` projects every account 12 months ahead from live balances; the View tab's health indicators and the Advising tab use it.
-- Advising: pick a what-if (trip, pay off card, surprise bill) to see "now-you wants / future-you warns", both futures on a chart, and a plan. **Apply plan** sends the plan's transfer through Nessie; top-ups and spending cuts are simulated in the forecast (`lib/plans.ts`). **Explain it with Gemini** writes the plan as a note from future-you, with every number checked against the forecast.
+- Advising: pick a what-if (trip, pay off card, surprise bill) to see "present-you wants / future-you warns", both futures on a chart, and a plan. **Apply plan** sends the plan's transfer through Nessie; top-ups and spending cuts are simulated in the forecast (`lib/plans.ts`). **Explain it with Gemini** writes the plan as a note from future-you, with every number checked against the forecast.
 
 ## Data
 
