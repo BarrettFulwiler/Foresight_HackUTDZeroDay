@@ -135,11 +135,11 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
           <>
             {welcome && prefs && <Welcome prefs={prefs} onClose={() => setWelcome(false)} />}
             <Highlights prefs={prefs} ready={ready} sum={sum} />
-            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={prefs?.units ?? "dollars"} />
             <div className={styles.row}>
               <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={prefs?.period ?? 3} /></section>
               <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} /></section>
             </div>
+            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={prefs?.units ?? "dollars"} />
             <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} />
             <MoneySummary accounts={accounts} source={source} />
           </>

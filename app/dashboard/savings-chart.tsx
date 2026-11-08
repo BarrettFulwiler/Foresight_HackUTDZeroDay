@@ -49,7 +49,7 @@ export default function SavingsChart({ points, topUps }: { points: Point[]; topU
     <div className={styles.chartCard}>
       <div className={styles.cardHead}>
         <div>
-          <h2 className={styles.cardTitle}>Savings &amp; investments</h2>
+          <h2 className={styles.cardTitle}>Account history</h2>
           <p className={styles.cardSub}>PNC checking, savings, CD and IRA · {longMonth(current.month)}</p>
         </div>
         <div className={styles.segmented} role="group" aria-label="Time range">
@@ -104,7 +104,7 @@ export default function SavingsChart({ points, topUps }: { points: Point[]; topU
       {topUps && topUps.total > 0 && (
         <p className={styles.chartNote}>
           This history includes {money(topUps.total, false)} moved in from an outside account ({topUps.count} deposits) in PNC&rsquo;s
-          sample data, which is why it rises. Without those, you&rsquo;re short each month; the forecast above leaves them out.
+          sample data, which is why it rises. Without those, you&rsquo;re short each month; the forecast below leaves them out.
         </p>
       )}
     </div>
