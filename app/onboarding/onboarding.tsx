@@ -39,6 +39,8 @@ export default function Onboarding({ summary, member, resume = false }: { summar
   const [step, setStep] = useState(0);
   const [p, setP] = useState<Prefs>(BLANK);
   const [demo, setDemo] = useState(false);
+  // A returning member (resume) may be forwarded straight to the dashboard; until that's decided, don't flash step 1.
+  const [forwarding, setForwarding] = useState(resume && Boolean(member));
 
   // ?demo=1 ("Try the demo") starts here with every step pre-filled, so the visitor picks personal or business
   // and clicks through. Otherwise start from what the sign-up form passed along.
@@ -55,6 +57,7 @@ export default function Onboarding({ summary, member, resume = false }: { summar
         router.replace(member.type === "company" ? "/dashboard/company" : "/dashboard");
         return;
       }
+      setForwarding(false);
       setP((cur) => ({ ...cur, accountType: member.type, name: member.type === "company" ? member.name : member.name.split(" ")[0] }));
       return;
     }
@@ -108,6 +111,17 @@ export default function Onboarding({ summary, member, resume = false }: { summar
   }, [summary.asOf]);
   const monthsLeft = p.goal.by ? monthsUntil(summary.asOf, p.goal.by) : 0;
   const perMonth = monthsLeft ? Math.max(0, p.goal.target - p.goal.saved) / monthsLeft : 0;
+
+  if (forwarding) {
+    return (
+      <main className={styles.page}>
+        <header className={styles.top}>
+          <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
+        </header>
+        <p className={styles.small} role="status" style={{ textAlign: "center", marginTop: 80 }}>Opening your dashboard…</p>
+      </main>
+    );
+  }
 
   return (
     <main className={styles.page}>
