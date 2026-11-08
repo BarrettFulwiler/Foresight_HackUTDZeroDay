@@ -1,9 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
 import type { Account, ScheduleEvent } from "../../lib/finance";
+import { planFacts, splitNumbers } from "../../lib/explain";
 import type { Forecast } from "../../lib/forecast";
 import { money, shortMonth } from "../../lib/format";
-import { FLOOR, PRESETS, type PresetId, buildPlan, shortDay } from "../../lib/plans";
+import { FLOOR, PRESETS, type PresetId, buildPlan, compareRows, shortDay } from "../../lib/plans";
 import type { Prefs } from "../../lib/prefs";
 import type { Receipt } from "./dashboard";
 import styles from "./dashboard.module.css";
@@ -24,6 +25,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
   const [applied, setApplied] = useState<Partial<Record<PresetId, string[]>>>({});
   const [busy, setBusy] = useState(false);
   const plan = useMemo(() => buildPlan(preset, accounts, schedule, asOf, goal), [preset, accounts, schedule, asOf, goal]);
+  const facts = useMemo(() => planFacts(plan, accounts), [plan, accounts]);
 
   const nessie = (id: string) => accounts.find((a) => a.id === id)?.nessieId;
   const name = (id: string) => {
@@ -71,6 +73,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
               {plan.warnings.map((w) => <li key={w}>{w}</li>)}
             </ul>
           </section>
+          <FutureNote facts={facts} />
         </div>
         <section className={styles.panel} aria-labelledby="pc-title">
           <h2 id="pc-title" className={styles.cardTitle}>PNC checking, next 12 months</h2>
@@ -127,15 +130,71 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
   );
 }
 
+type NoteState =
+  | { status: "loading" }
+  | { status: "done"; headline: string; message: string; checked: number; model: string }
+  | { status: "error"; error: string };
+
+const modelName = (m: string) => m.replace(/^gemini-/, "Gemini ").replace(/-/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
+
+// Gemini writes a note in future-you's voice from the plan's facts; the server checks every number before it's shown.
+function FutureNote({ facts }: { facts: string[] }) {
+  const key = facts.join("\n");
+  const [notes, setNotes] = useState<Record<string, NoteState>>({});
+  const note = notes[key];
+  const prev = note?.status === "loading" ? undefined : note;
+
+  async function ask(fresh: boolean) {
+    setNotes((n) => ({ ...n, [key]: { status: "loading" } }));
+    let next: NoteState;
+    try {
+      const res = await fetch("/api/explain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts, fresh }) });
+      const data = await res.json().catch(() => ({}));
+      next = res.ok ? { status: "done", ...data } : { status: "error", error: data.error ?? "Gemini didn't answer. Try again." };
+    } catch {
+      next = { status: "error", error: "Couldn't reach Foresight's server." };
+    }
+    setNotes((n) => ({ ...n, [key]: next }));
+  }
+
+  return (
+    <section className={`${styles.panel} ${styles.voice} ${styles.noteCard}`} aria-labelledby="note-title" aria-busy={note?.status === "loading"}>
+      <p id="note-title" className={styles.voiceLabel}>A note from future-you</p>
+      {note?.status === "done" ? (
+        <div aria-live="polite" className={styles.noteText}>
+          <p className={styles.noteHeadline}>{note.headline}</p>
+          <p className={styles.noteBody}>
+            {splitNumbers(note.message).map((part, i) => (i % 2 ? <mark key={i} className={styles.checkedNum}>{part}</mark> : part))}
+          </p>
+          <p className={styles.noteCheck}>
+            ✓ All {note.checked} {note.checked === 1 ? "number matches" : "numbers match"} the forecast · Written by {modelName(note.model)}
+          </p>
+        </div>
+      ) : (
+        <p className={styles.note}>
+          {note?.status === "loading"
+            ? "Gemini is writing, and Foresight will check every number against the forecast…"
+            : "Gemini turns this forecast into a note from future-you. It sees only the calculated facts below, never your name or account numbers, and Foresight checks every number it writes."}
+        </p>
+      )}
+      {prev?.status === "error" && <p className={styles.receiptErr} role="alert">{prev.error}</p>}
+      <div className={styles.noteActions}>
+        <button type="button" className={styles.noteBtn} onClick={() => ask(note?.status === "done")} disabled={note?.status === "loading"}>
+          {note?.status === "loading" ? "Writing…" : note?.status === "done" ? "Write another" : "Explain it with Gemini"}
+        </button>
+      </div>
+      <details className={styles.noteFacts}>
+        <summary>What Gemini sees ({facts.length} facts)</summary>
+        <ul>
+          {facts.map((f, i) => <li key={i}>{f}</li>)}
+        </ul>
+      </details>
+    </section>
+  );
+}
+
 function Compare({ asIs, withPlan, cardIds }: { asIs: Forecast; withPlan: Forecast; cardIds: string[] }) {
-  const end = shortMonth(withPlan.months.at(-1)!.month);
-  const owed = (f: Forecast) => cardIds.reduce((sum, id) => sum + Math.max(0, f.months.at(-1)!.balances[id] ?? 0), 0);
-  const rows = [
-    { label: "First overdraft", a: asIs.firstNegative ? shortDay(asIs.firstNegative.date) : "None", b: withPlan.firstNegative ? shortDay(withPlan.firstNegative.date) : "None" },
-    { label: "Lowest checking", a: money(asIs.lowest.balance, false), b: money(withPlan.lowest.balance, false) },
-    { label: `Cash and savings, ${end}`, a: money(asIs.months.at(-1)!.liquid, false), b: money(withPlan.months.at(-1)!.liquid, false) },
-    { label: `Owed on cards, ${end}`, a: money(owed(asIs), false), b: money(owed(withPlan), false) },
-  ];
+  const rows = compareRows(asIs, withPlan, cardIds);
   return (
     <table className={styles.compare}>
       <thead>

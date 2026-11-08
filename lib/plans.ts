@@ -2,7 +2,7 @@
 // Every sentence is filled in from calculated values; nothing here is guessed by an AI.
 import type { Account, ScheduleEvent } from "./finance";
 import { runForecast, type Forecast, type Scenario } from "./forecast";
-import { longMonth, money } from "./format";
+import { longMonth, money, shortMonth } from "./format";
 import type { Prefs } from "./prefs";
 
 export type PresetId = "trip" | "payoff" | "emergency";
@@ -31,6 +31,18 @@ export const shortDay = (iso: string) => `${MONTH[Number(iso.slice(5, 7)) - 1]} 
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso) + n * 86400000).toISOString().slice(0, 10);
 const ceil50 = (n: number) => Math.ceil(n / 50) * 50;
 const r = (n: number) => money(n, false);
+
+/** The "As is vs With the plan" table. Advising shows it, and Gemini gets it as facts. */
+export function compareRows(asIs: Forecast, withPlan: Forecast, cardIds: string[]) {
+  const end = shortMonth(withPlan.months.at(-1)!.month);
+  const owed = (f: Forecast) => cardIds.reduce((sum, id) => sum + Math.max(0, f.months.at(-1)!.balances[id] ?? 0), 0);
+  return [
+    { label: "First overdraft", a: asIs.firstNegative ? shortDay(asIs.firstNegative.date) : "None", b: withPlan.firstNegative ? shortDay(withPlan.firstNegative.date) : "None" },
+    { label: "Lowest checking", a: money(asIs.lowest.balance, false), b: money(withPlan.lowest.balance, false) },
+    { label: `Cash and savings, ${end}`, a: money(asIs.months.at(-1)!.liquid, false), b: money(withPlan.months.at(-1)!.liquid, false) },
+    { label: `Owed on cards, ${end}`, a: money(owed(asIs), false), b: money(owed(withPlan), false) },
+  ];
+}
 
 function low(f: Forecast, days: number) {
   const pts = f.checkingDaily.slice(0, days);

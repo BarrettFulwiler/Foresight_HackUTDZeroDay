@@ -1873,3 +1873,84 @@
     animation: none;
   }
 }
+
+/* Advising: Gemini's note from future-you */
+.noteCard {
+  border-left-color: #a855f7;
+  background: linear-gradient(160deg, #f5efff, #ffffff 70%);
+}
+
+.noteText {
+  display: grid;
+  gap: 8px;
+}
+
+.noteHeadline {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.noteBody {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.checkedNum {
+  font-weight: 700;
+  color: inherit;
+  background: #ede9fe;
+  border-radius: 4px;
+  padding: 0 3px;
+}
+
+.noteCheck {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--pos);
+}
+
+.noteActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.noteBtn {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  cursor: pointer;
+}
+
+.noteBtn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.noteFacts {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.noteFacts summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.noteFacts ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  line-height: 1.45;
+}

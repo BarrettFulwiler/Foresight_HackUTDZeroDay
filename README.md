@@ -30,12 +30,20 @@ Copy `.env.example` to `.env.local` and fill in the team's Nessie key and accoun
 
 Transfers go through our own server routes (`app/api/nessie/*`), so the key never reaches the browser. They start as **pending**; Nessie's hosted API completes them on a once-a-minute sweep, and the app polls until they finish.
 
+### Gemini (the note from future-you)
+
+Add `GEMINI_API_KEY` (from Google AI Studio) to `.env.local`. Without it, the rest of the app works and the Explain button shows a setup message.
+
+Gemini never does the math. `lib/explain.ts` turns the plan into a list of calculated facts, and `app/api/explain` asks Gemini (Interactions API, `gemini-3.5-flash` with two fallbacks) to rewrite them as a note from future-you. Before the note is shown, the server checks that every number in it appears in the facts. If one doesn't, Gemini gets one retry, and then the note is refused. Gemini sees only those facts: no names or account numbers.
+
 ## Code map
 
 - `app/` — pages. Each page has its own CSS module; `globals.css` is only a reset.
 - `lib/finance.ts` — reads the CSVs in `data/` (server only) for the demo customer **C005**.
 - `lib/nessie.ts` — server-only Nessie client. `lib/live-accounts.ts` swaps in live balances for the 6 linked accounts (PNC checking, savings and card; Capital One checking, savings and card).
 - `lib/capital-one-demo.ts` — fallback Capital One accounts when Nessie isn't reachable.
+- `lib/forecast.ts`, `lib/plans.ts` — the 12-month forecast and the what-if plans.
+- `lib/explain.ts`, `lib/gemini.ts`, `app/api/explain/` — Gemini's note from future-you and the number check.
 - `lib/prefs.ts` — onboarding choices, saved in the browser for now.
 - `lib/summary.ts`, `lib/format.ts`, `lib/brand.ts` — shared numbers, formatting, and the product name.
 
@@ -44,7 +52,7 @@ Transfers go through our own server routes (`app/api/nessie/*`), so the key neve
 - Sign-in is not connected to a back end yet; the demo user is hardcoded to customer C005.
 - Balances for the 6 linked accounts are live from Nessie, and the Move tab makes real Nessie transfers with receipts. PNC's history and analysis still come from PNC's CSVs.
 - `lib/forecast.ts` projects every account 12 months ahead from live balances; the View tab's health indicators and the Advising tab use it.
-- Advising: pick a what-if (trip, pay off card, surprise bill) to see "now-you wants / future-you warns", both futures on a chart, and a plan. **Apply plan** sends the plan's transfer through Nessie; top-ups and spending cuts are simulated in the forecast (`lib/plans.ts`).
+- Advising: pick a what-if (trip, pay off card, surprise bill) to see "now-you wants / future-you warns", both futures on a chart, and a plan. **Apply plan** sends the plan's transfer through Nessie; top-ups and spending cuts are simulated in the forecast (`lib/plans.ts`). **Explain it with Gemini** writes the plan as a note from future-you, with every number checked against the forecast.
 
 ## Data
 
