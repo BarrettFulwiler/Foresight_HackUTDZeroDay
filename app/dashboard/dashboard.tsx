@@ -134,6 +134,10 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
     <main className={styles.page}>
       <header className={styles.top}>
         <a className={styles.brand} href="/"><span className={styles.mark} aria-hidden="true" />{BRAND}</a>
+        <nav className={styles.modeSwitch} aria-label="Account type">
+          <a href="/dashboard" aria-current="page">Individual</a>
+          <a href="/dashboard/company">Company</a>
+        </nav>
         <div className={styles.profile}>
           <div>
             <p className={styles.hello}>Welcome back{prefs?.name ? `, ${prefs.name}` : ""}</p>

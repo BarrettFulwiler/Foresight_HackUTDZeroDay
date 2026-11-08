@@ -61,7 +61,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
 
   function finish(prefs: Prefs) {
     savePrefs({ ...prefs, completedAt: new Date().toISOString() });
-    router.push("/dashboard?welcome=1");
+    router.push(prefs.accountType === "company" ? "/dashboard/company" : "/dashboard?welcome=1");
   }
 
   function toggleGoal(kind: GoalKind) {
@@ -101,8 +101,8 @@ export default function Onboarding({ summary }: { summary: Summary }) {
               <h1 className={styles.stepTitle}>{p.name ? `Hi ${p.name}! ` : ""}Who is this for?</h1>
               <p className={styles.stepSub}>We&rsquo;ll tailor what you see to how you use money.</p>
               <div className={styles.choices} role="radiogroup" aria-label="Account type">
-                <Choice checked title="Just me" text="My own accounts, bills and goals." onSelect={() => set("accountType", "individual")} />
-                <Choice checked={false} disabled title="My company" text="Business accounts and payroll." tag="Coming soon" onSelect={() => {}} />
+                <Choice checked={p.accountType === "individual"} title="Just me" text="My own accounts, bills and goals." onSelect={() => set("accountType", "individual")} />
+                <Choice checked={p.accountType === "company"} title="My company" text="Business accounts, loans and cash on hand." onSelect={() => set("accountType", "company")} />
               </div>
             </>
           )}
