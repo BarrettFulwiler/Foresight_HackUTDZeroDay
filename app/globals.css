@@ -1,0 +1,27 @@
+/* Base reset only. Each page styles itself with its own CSS module. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+p {
+  line-height: 1.6;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
