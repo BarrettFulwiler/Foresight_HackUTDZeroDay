@@ -25,7 +25,7 @@ function cardDetail(a: Account) {
   return "Everyday spending";
 }
 
-export default function MoneySummary({ accounts }: { accounts: Account[] }) {
+export default function MoneySummary({ accounts, source }: { accounts: Account[]; source: "nessie" | "demo" }) {
   const rail = useRef<HTMLDivElement>(null);
   const total = (kind: AccountKind) => accounts.filter((a) => a.kind === kind).reduce((s, a) => s + a.balance, 0);
   const owned = total("cash") + total("investment");
@@ -39,7 +39,10 @@ export default function MoneySummary({ accounts }: { accounts: Account[] }) {
       <div className={styles.cardHead}>
         <div>
           <h2 id="summary-title" className={styles.cardTitle}>Money summary</h2>
-          <p className={styles.cardSub}>{accounts.length} accounts at 2 banks</p>
+          <p className={styles.cardSub}>
+            {accounts.length} accounts at 2 banks ·{" "}
+            {source === "nessie" ? `${accounts.filter((a) => a.live).length} with live balances from Nessie` : "Nessie unavailable, showing demo balances"}
+          </p>
         </div>
         <div className={styles.railBtns}>
           <button type="button" className={styles.iconBtn} aria-label="Scroll accounts left" onClick={() => scroll(-1)}>‹</button>
@@ -59,7 +62,8 @@ export default function MoneySummary({ accounts }: { accounts: Account[] }) {
         {sorted.map((a, i) => (
           <article key={a.id} className={`${styles.acct} ${styles[`acct_${a.kind}`]} ${a.bank === "Capital One" ? styles.acctAlt : ""} ${i === 0 ? styles.acctLead : ""}`}>
             <span className={styles.acctWatermark} aria-hidden="true">{a.name}</span>
-            <p className={styles.acctCaption}>{CAPTION[a.kind]}</p>
+            {a.live && <span className={styles.acctLive} title="Balance comes live from Nessie">● Live</span>}
+            <p className={styles.acctCaption}>{CAPTION[a.kind]}{a.pending ? ` · ${money(a.pending)} pending` : ""}</p>
             <p className={styles.acctBalance}>{money(a.balance)}</p>
             <p className={styles.acctMask}>•••• •••• •••• {a.mask}</p>
             <div className={styles.acctFoot}>

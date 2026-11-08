@@ -1096,6 +1096,18 @@
   text-align: right;
 }
 
+.acctLive {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #ffffff2e;
+}
+
 /* ---------- Move / Edit / Advising ---------- */
 .form {
   display: grid;
@@ -1195,6 +1207,185 @@
   background: #e9e9eb;
   color: #111;
   border-bottom-left-radius: 6px;
+}
+
+/* ---------- Move tab: live transfers and Nessie receipts ---------- */
+.moveGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.liveTag,
+.demoTag {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+.liveTag {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.demoTag {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.alert {
+  margin: 0 0 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.empty {
+  margin: 18px 0 4px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px dashed var(--line);
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.receipts {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.receipt {
+  position: relative;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: #fafbff;
+  overflow: hidden;
+}
+
+.receiptTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.receiptTop strong {
+  font-size: 20px;
+}
+
+.status {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef0f5;
+  color: var(--muted);
+}
+
+.st_pending,
+.st_sending,
+.st_slow {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.st_completed {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.st_declined,
+.st_failed,
+.st_cancelled {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.receiptRoute {
+  margin: 4px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.receiptErr {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--neg);
+}
+
+.receiptMeta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.receiptMeta dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.receiptMeta dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.receiptMeta code {
+  font-size: 11px;
+}
+
+.pendingBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: #e0e7ff;
+  overflow: hidden;
+}
+
+.pendingBar span {
+  display: block;
+  width: 35%;
+  height: 100%;
+  background: var(--accent);
+  animation: slide 1.4s ease-in-out infinite;
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@media (max-width: 900px) {
+  .moveGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pendingBar span {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
 }
 
 .foot {

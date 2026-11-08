@@ -24,18 +24,25 @@ corepack pnpm dev
 
 Then open http://127.0.0.1:3000. Other scripts: `corepack pnpm build`, `corepack pnpm typecheck`.
 
+### Nessie (live balances and transfers)
+
+Copy `.env.example` to `.env.local` and fill in the team's Nessie key and account IDs (ask a teammate; share them privately, never in git). Without it the app still runs, showing demo balances with transfers turned off.
+
+Transfers go through our own server routes (`app/api/nessie/*`), so the key never reaches the browser. They start as **pending**; Nessie's hosted API completes them on a once-a-minute sweep, and the app polls until they finish.
+
 ## Code map
 
 - `app/` — pages. Each page has its own CSS module; `globals.css` is only a reset.
 - `lib/finance.ts` — reads the CSVs in `data/` (server only) for the demo customer **C005**.
-- `lib/capital-one-demo.ts` — **placeholder** Capital One accounts until Nessie is connected.
+- `lib/nessie.ts` — server-only Nessie client. `lib/live-accounts.ts` swaps in live balances for the 5 linked accounts (PNC checking and savings, Capital One checking, savings and card).
+- `lib/capital-one-demo.ts` — fallback Capital One accounts when Nessie isn't reachable.
 - `lib/prefs.ts` — onboarding choices, saved in the browser for now.
 - `lib/summary.ts`, `lib/format.ts`, `lib/brand.ts` — shared numbers, formatting, and the product name.
 
 ## Status
 
 - Sign-in is not connected to a back end yet; the demo user is hardcoded to customer C005.
-- Capital One accounts are placeholders; the Move tab's transfer turns on once Nessie is wired up.
+- Balances for the 5 linked accounts are live from Nessie, and the Move tab makes real Nessie transfers with receipts. PNC's history and analysis still come from PNC's CSVs.
 - The Advising tab is a placeholder for the plan view.
 
 ## Data

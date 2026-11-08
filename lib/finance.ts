@@ -17,6 +17,11 @@ export type Account = {
   monthlyPayment: number;
   apr: number;
   yieldPct: number;
+  // Set when this account's balance comes live from Nessie (see lib/live-accounts.ts).
+  nessieId?: string;
+  live?: boolean;
+  available?: number;
+  pending?: number;
 };
 export type MonthSpend = {
   month: string; // YYYY-MM

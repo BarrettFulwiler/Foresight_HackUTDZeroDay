@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import type { DashboardData } from "../../lib/finance";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Account, DashboardData } from "../../lib/finance";
 import { BRAND } from "../../lib/brand";
 import { categoryMeta, longMonth, money } from "../../lib/format";
 import { GOAL_OPTIONS, type Prefs, monthsUntil, usePrefs } from "../../lib/prefs";
@@ -13,12 +13,87 @@ import styles from "./dashboard.module.css";
 const TABS = ["View", "Move", "Edit", "Advising"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function Dashboard({ data }: { data: DashboardData }) {
+type Source = "nessie" | "demo";
+export type Receipt = {
+  requestId: string;
+  id?: string; // Nessie transaction id
+  fromId: string;
+  toId: string;
+  amount: number;
+  status: "sending" | "pending" | "completed" | "declined" | "cancelled" | "failed" | "slow";
+  createdAt: number;
+  error?: string;
+  before: { from: number; to: number };
+  after?: { from: number; to: number };
+};
+
+const POLL_MS = 5000;
+const GIVE_UP_MS = 3 * 60 * 1000;
+
+export default function Dashboard({ data, source: initialSource, sourceError }: { data: DashboardData; source: Source; sourceError?: string }) {
   const [tab, setTab] = useState<Tab>("View");
   const latest = data.months.at(-1)!;
   const { prefs, ready } = usePrefs();
-  const sum = useMemo(() => summarize(data), [data]);
   const [welcome, setWelcome] = useState(false);
+
+  // One shared set of balances for every tab. Transfers update it, so View reflects Move right away.
+  const [accounts, setAccounts] = useState<Account[]>(data.accounts);
+  const [source, setSource] = useState<Source>(initialSource);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const sum = useMemo(() => summarize({ ...data, accounts }), [data, accounts]);
+
+  const refreshAccounts = useCallback(async () => {
+    const res = await fetch("/api/nessie/accounts", { cache: "no-store" });
+    const body = (await res.json()) as { accounts: Account[]; source: Source };
+    setAccounts(body.accounts);
+    setSource(body.source);
+    return body.accounts;
+  }, []);
+
+  const balanceOf = (list: Account[], nessieId: string) => list.find((a) => a.nessieId === nessieId)?.balance ?? 0;
+
+  async function sendTransfer(fromId: string, toId: string, amount: number) {
+    const requestId = crypto.randomUUID();
+    const receipt: Receipt = { requestId, fromId, toId, amount, status: "sending", createdAt: Date.now(), before: { from: balanceOf(accounts, fromId), to: balanceOf(accounts, toId) } };
+    setReceipts((r) => [receipt, ...r]);
+    const update = (patch: Partial<Receipt>) => setReceipts((r) => r.map((x) => (x.requestId === requestId ? { ...x, ...patch } : x)));
+    try {
+      const res = await fetch("/api/nessie/transfers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fromId, toId, amount, requestId }) });
+      const body = await res.json();
+      if (!res.ok) return update({ status: "failed", error: body.error || "Transfer failed" });
+      update({ id: body.transaction.id, status: "pending" });
+      refreshAccounts(); // shows the hold on the sending account right away
+    } catch {
+      update({ status: "failed", error: "Couldn't reach the server" });
+    }
+  }
+
+  // Poll pending transfers until Nessie's once-a-minute sweep completes them, then refresh balances.
+  const receiptsRef = useRef(receipts);
+  receiptsRef.current = receipts;
+  useEffect(() => {
+    if (!receipts.some((r) => r.status === "pending")) return;
+    const timer = setInterval(async () => {
+      for (const r of receiptsRef.current.filter((x) => x.status === "pending" && x.id)) {
+        if (Date.now() - r.createdAt > GIVE_UP_MS) {
+          setReceipts((list) => list.map((x) => (x.requestId === r.requestId ? { ...x, status: "slow" } : x)));
+          continue;
+        }
+        const res = await fetch(`/api/nessie/transactions/${r.id}`, { cache: "no-store" }).catch(() => null);
+        const t = res && res.ok ? ((await res.json()) as { status: Receipt["status"]; decisionReason: string }) : null;
+        if (!t || t.status === "pending") continue;
+        const fresh = await refreshAccounts();
+        setReceipts((list) =>
+          list.map((x) =>
+            x.requestId === r.requestId
+              ? { ...x, status: t.status, error: t.status === "completed" ? undefined : t.decisionReason || undefined, after: { from: balanceOf(fresh, r.fromId), to: balanceOf(fresh, r.toId) } }
+              : x,
+          ),
+        );
+      }
+    }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [receipts, refreshAccounts]);
 
   // Coming straight from onboarding (?welcome=1): show future-you's first message once.
   useEffect(() => {
@@ -59,10 +134,10 @@ export default function Dashboard({ data }: { data: DashboardData }) {
               <section className={styles.panel}><SavingsChart points={data.savingsHistory} /></section>
             </div>
             <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} />
-            <MoneySummary accounts={data.accounts} />
+            <MoneySummary accounts={accounts} source={source} />
           </>
         )}
-        {tab === "Move" && <Move data={data} />}
+        {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} />}
         {tab === "Edit" && <EditBudgets data={data} />}
         {tab === "Advising" && <Advising />}
       </div>
@@ -171,37 +246,105 @@ function Budget({ income, spending, loans, month }: { income: number; spending: 
   );
 }
 
-function Move({ data }: { data: DashboardData }) {
-  const cash = data.accounts.filter((a) => a.kind === "cash");
-  const [from, setFrom] = useState(cash.find((a) => a.bank === "Capital One" && a.type === "savings")?.id ?? cash[0]?.id);
-  const [to, setTo] = useState(cash.find((a) => a.bank === "PNC" && a.type === "checking")?.id ?? cash[1]?.id);
+function Move({ accounts, source, sourceError, receipts, onTransfer }: {
+  accounts: Account[];
+  source: Source;
+  sourceError?: string;
+  receipts: Receipt[];
+  onTransfer: (fromId: string, toId: string, amount: number) => Promise<void>;
+}) {
+  const linked = accounts.filter((a) => a.nessieId);
+  const sources = linked.filter((a) => a.kind === "cash");
+  const [from, setFrom] = useState(sources.find((a) => a.bank === "Capital One" && a.type === "savings")?.nessieId ?? sources[0]?.nessieId ?? "");
+  const [to, setTo] = useState(linked.find((a) => a.bank === "PNC" && a.type === "checking")?.nessieId ?? "");
   const [amount, setAmount] = useState("300");
-  const label = (id?: string) => {
-    const a = data.accounts.find((x) => x.id === id);
-    return a ? `${a.bank} ${a.name} ••${a.mask} · ${money(a.balance)}` : "";
+  const [busy, setBusy] = useState(false);
+
+  const fromAcct = linked.find((a) => a.nessieId === from);
+  const value = Number(amount);
+  const available = fromAcct?.available ?? fromAcct?.balance ?? 0;
+  const problem =
+    source !== "nessie" ? "Nessie isn't connected" :
+    !from || !to ? "Pick both accounts" :
+    from === to ? "Pick two different accounts" :
+    !(value > 0) ? "Enter an amount" :
+    value > available ? `Only ${money(available)} available` : "";
+  const label = (a: Account) => `${a.bank} ${a.name} ••${a.mask} · ${money(a.kind === "credit" ? a.balance : a.available ?? a.balance)}${a.kind === "credit" ? " owed" : ""}`;
+  const nameOf = (id: string) => {
+    const a = linked.find((x) => x.nessieId === id);
+    return a ? `${a.bank} ${a.name} ••${a.mask}` : id;
   };
+
+  async function submit() {
+    if (problem || busy) return;
+    setBusy(true);
+    await onTransfer(from, to, Math.round(value * 100) / 100);
+    setBusy(false);
+  }
+
   return (
-    <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="move-title">
-      <h2 id="move-title" className={styles.cardTitle}>Move money</h2>
-      <p className={styles.cardSub}>Between any of your accounts, at either bank.</p>
-      <div className={styles.form}>
-        <label className={styles.field}>From
-          <select value={from} onChange={(e) => setFrom(e.target.value)}>
-            {cash.map((a) => <option key={a.id} value={a.id}>{label(a.id)}</option>)}
-          </select>
-        </label>
-        <label className={styles.field}>To
-          <select value={to} onChange={(e) => setTo(e.target.value)}>
-            {data.accounts.filter((a) => a.id !== from).map((a) => <option key={a.id} value={a.id}>{label(a.id)}</option>)}
-          </select>
-        </label>
-        <label className={styles.field}>Amount
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} />
-        </label>
-        <button type="button" className={styles.primaryBtn} disabled title="Connects to Capital One's Nessie API">Transfer {amount ? money(Number(amount)) : ""}</button>
-        <p className={styles.note}>Transfers run through Capital One&rsquo;s Nessie API. This button turns on once the back end is connected.</p>
-      </div>
-    </section>
+    <div className={styles.moveGrid}>
+      <section className={styles.panel} aria-labelledby="move-title">
+        <div className={styles.cardHead}>
+          <div>
+            <h2 id="move-title" className={styles.cardTitle}>Move money</h2>
+            <p className={styles.cardSub}>Between your accounts at either bank, through Capital One&rsquo;s Nessie API.</p>
+          </div>
+          <span className={source === "nessie" ? styles.liveTag : styles.demoTag}>{source === "nessie" ? "Live · Nessie" : "Demo data"}</span>
+        </div>
+        {source !== "nessie" && <p className={styles.alert}>Transfers are off because Nessie isn&rsquo;t reachable{sourceError ? ` (${sourceError})` : ""}.</p>}
+        <div className={styles.form}>
+          <label className={styles.field}>From
+            <select value={from} onChange={(e) => setFrom(e.target.value)}>
+              {sources.map((a) => <option key={a.nessieId} value={a.nessieId}>{label(a)}</option>)}
+            </select>
+          </label>
+          <label className={styles.field}>To
+            <select value={to} onChange={(e) => setTo(e.target.value)}>
+              <option value="">Choose an account</option>
+              {linked.filter((a) => a.nessieId !== from).map((a) => <option key={a.nessieId} value={a.nessieId}>{label(a)}</option>)}
+            </select>
+          </label>
+          <label className={styles.field}>Amount ($)
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} />
+          </label>
+          <button type="button" className={styles.primaryBtn} disabled={Boolean(problem) || busy} onClick={submit}>
+            {busy ? "Sending…" : `Transfer ${value > 0 ? money(value) : ""}`}
+          </button>
+          <p className={styles.note}>{problem || "Transfers show as pending first. Nessie usually completes them within a minute."}</p>
+        </div>
+      </section>
+
+      <section className={styles.panel} aria-labelledby="receipts-title" aria-live="polite">
+        <h2 id="receipts-title" className={styles.cardTitle}>Nessie receipts</h2>
+        <p className={styles.cardSub}>Every transfer, straight from Capital One&rsquo;s Nessie ledger.</p>
+        {receipts.length === 0 ? (
+          <p className={styles.empty}>No transfers yet this session.</p>
+        ) : (
+          <ul className={styles.receipts}>
+            {receipts.map((r) => (
+              <li key={r.requestId} className={styles.receipt}>
+                <div className={styles.receiptTop}>
+                  <strong>{money(r.amount)}</strong>
+                  <span className={`${styles.status} ${styles[`st_${r.status}`] ?? ""}`}>
+                    {r.status === "sending" ? "Sending" : r.status === "pending" ? "Pending" : r.status === "slow" ? "Still pending" : r.status === "failed" ? "Failed" : r.status[0].toUpperCase() + r.status.slice(1)}
+                  </span>
+                </div>
+                <p className={styles.receiptRoute}>{nameOf(r.fromId)} → {nameOf(r.toId)}</p>
+                {r.error && <p className={styles.receiptErr}>{r.error}</p>}
+                <dl className={styles.receiptMeta}>
+                  {r.id && <div><dt>Transaction</dt><dd><code>{r.id}</code></dd></div>}
+                  <div><dt>Sent</dt><dd>{new Date(r.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</dd></div>
+                  <div><dt>From</dt><dd>{money(r.before.from)}{r.after ? ` → ${money(r.after.from)}` : ""}</dd></div>
+                  <div><dt>To</dt><dd>{money(r.before.to)}{r.after ? ` → ${money(r.after.to)}` : ""}</dd></div>
+                </dl>
+                {r.status === "pending" && <div className={styles.pendingBar} aria-hidden="true"><span /></div>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }
 
