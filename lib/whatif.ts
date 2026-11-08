@@ -5,6 +5,7 @@
 import type { Account, ScheduleEvent } from "./finance";
 import { payoffEffect, runForecast, type Forecast, type Scenario } from "./forecast";
 import { longMonth, money } from "./format";
+import { audienceFact } from "./explain";
 import { compareRows, FLOOR, type NowMove } from "./plans";
 
 export type WhatIfSpec = {
@@ -164,6 +165,13 @@ export function buildCustomPlan(spec: WhatIfSpec, accounts: Account[], schedule:
   const pncCard = find("PNC", "credit_card");
   const shield = { fromId: pncSavings.id, toId: checking.id, floor: FLOOR, topUpTo: TOP_UP_TO };
   const tomorrow = addDays(asOf, 1);
+  // A company dashboard has only its own accounts (no Capital One side): name them as the company does.
+  const business = !accounts.some((a) => a.bank === "Capital One");
+  const CHK = business ? checking.name : "PNC Checking";
+  const SAV = business ? pncSavings.name : "PNC Savings";
+  const INTO = business ? CHK : "checking";
+  const CARD = business ? (pncCard?.name ?? "the card") : "the PNC card";
+  const pay = business ? "customer payments" : "paychecks";
   const addCuts = (...sets: (Record<string, number> | undefined)[]) => {
     const out: Record<string, number> = {};
     for (const set of sets) for (const [k, v] of Object.entries(set ?? {})) out[k] = (out[k] ?? 0) + v;
@@ -191,31 +199,31 @@ export function buildCustomPlan(spec: WhatIfSpec, accounts: Account[], schedule:
   }
   if (changeMoves.length) change.moves = changeMoves;
 
-  const neg = (f: Forecast) => (f.firstNegative ? `PNC checking is overdrawn on ${shortDay(f.firstNegative.date)} (${money(f.firstNegative.balance)})` : "");
+  const neg = (f: Forecast) => (f.firstNegative ? `${business ? CHK : "PNC checking"} is overdrawn on ${shortDay(f.firstNegative.date)} (${money(f.firstNegative.balance)})` : "");
   const safe = (f: Forecast) =>
-    f.firstNegative ? `Checking still goes negative on ${shortDay(f.firstNegative.date)}.` : `PNC checking never goes negative. Its lowest point is ${money(f.lowest.balance)} on ${shortDay(f.lowest.date)}.`;
+    f.firstNegative ? `${business ? CHK : "Checking"} still goes negative on ${shortDay(f.firstNegative.date)}.` : `${business ? CHK : "PNC checking"} never goes negative. Its lowest point is ${money(f.lowest.balance)} on ${shortDay(f.lowest.date)}.`;
   const endCash = (f: Forecast) => f.months.at(-1)!.liquid;
 
   if (spec.kind === "habit") {
     const asIs = base;
     const withPlan = run({ ...change, shield });
     const steps: string[] = [];
-    if (spec.payoffCard && pncCard) steps.push(`Pay off the PNC card (${money(pncCard.balance)}) from PNC Savings now.`);
+    if (spec.payoffCard && pncCard) steps.push(`Pay off ${CARD} (${money(pncCard.balance)}) from ${SAV} now.`);
     if (spec.cutsCategory && spec.cutsAmount) steps.push(`Cut ${spec.cutsCategory} spending by ${r(spec.cutsAmount)} a month, every month.`);
-    if (spec.saveMonthly) steps.push(`Move ${r(spec.saveMonthly)} from PNC Checking to PNC Savings on the 1st of each month.`);
-    if (spec.monthlyDelta && spec.monthlyDelta > 0) steps.push(`${r(spec.monthlyDelta)} of extra income lands in PNC Checking on the 15th of each month.`);
-    steps.push(`Turn on automatic top-ups: PNC Savings refills checking whenever it would drop below ${r(FLOOR)}.`);
+    if (spec.saveMonthly) steps.push(`Move ${r(spec.saveMonthly)} from ${CHK} to ${SAV} on the 1st of each month.`);
+    if (spec.monthlyDelta && spec.monthlyDelta > 0) steps.push(`${r(spec.monthlyDelta)} of extra income lands in ${CHK} on the 15th of each month.`);
+    steps.push(`Turn on automatic top-ups: ${SAV} refills ${INTO} whenever it would drop below ${r(FLOOR)}.`);
     const warnings = [
       neg(asIs) ? `${neg(asIs)}, as things stand.` : "",
-      asIs.monthly.shortfall < 0 ? `As things stand, bills outrun paychecks by ${r(-asIs.monthly.shortfall)} a month.` : "",
+      asIs.monthly.shortfall < 0 ? `As things stand, bills outrun ${pay} by ${r(-asIs.monthly.shortfall)} a month.` : "",
       // Same calculation as the View card and the "Pay off my card" preset, so the interest figure matches everywhere.
       spec.payoffCard && pncCard && pncCard.balance > 0
-        ? `The PNC card carries ${money(pncCard.balance)} at ${pncCard.apr}%, about ${r(payoffEffect(accounts, schedule, asOf, pncCard.id, pncSavings.id, baseCuts).cardSaved)} a month in interest over the next year.`
+        ? `${business ? CARD : "The PNC card"} carries ${money(pncCard.balance)} at ${pncCard.apr}%, about ${r(payoffEffect(accounts, schedule, asOf, pncCard.id, pncSavings.id, baseCuts).cardSaved)} a month in interest over the next year.`
         : "",
     ].filter(Boolean);
     return {
       id: "custom", title: spec.title, want: spec.want, interpretation: spec.interpretation, warnings, steps,
-      outcome: [safe(withPlan), `Cash and savings end the year at ${r(endCash(withPlan))}, vs ${r(endCash(asIs))} as is.`, ...(withPlan.monthly.shortfall >= 0 ? [`The monthly gap closes: paychecks cover bills with ${r(withPlan.monthly.shortfall)} to spare.`] : [])],
+      outcome: [safe(withPlan), `Cash and savings end the year at ${r(endCash(withPlan))}, vs ${r(endCash(asIs))} as is.`, ...(withPlan.monthly.shortfall >= 0 ? [`The monthly gap closes: ${pay} cover bills with ${r(withPlan.monthly.shortfall)} to spare.`] : [])],
       nowMoves: spec.payoffCard && pncCard && pncCard.balance > 0 ? [{ fromId: pncSavings.id, toId: pncCard.id, amount: Math.round(pncCard.balance * 100) / 100, label: "Pay off PNC card" }] : [],
       asIs, withPlan,
     };
@@ -233,7 +241,7 @@ export function buildCustomPlan(spec: WhatIfSpec, accounts: Account[], schedule:
     const fromSavings = Math.min(spec.oneOffAmount, Math.max(0, Math.floor(pncSavings.balance)));
     if (fromSavings > 0) {
       planMoves.push({ date: addDays(`${spec.oneOffMonth}-10`, -1), fromId: pncSavings.id, toId: checking.id, amount: fromSavings, label: "Move savings for the expense" });
-      savingsStep = `On ${shortDay(addDays(`${spec.oneOffMonth}-10`, -1))}, move ${r(fromSavings)} from PNC Savings into checking, so the ${r(spec.oneOffAmount)} ${spec.oneOffLabel || "expense"} is paid from savings, not from a tight checking balance.`;
+      savingsStep = `On ${shortDay(addDays(`${spec.oneOffMonth}-10`, -1))}, move ${r(fromSavings)} from ${SAV} into ${INTO}, so the ${r(spec.oneOffAmount)} ${spec.oneOffLabel || "expense"} is paid from savings, not from a tight checking balance.`;
     }
   }
   // Bridge now only for what's still short in the next 60 days once the expense is paid from savings
@@ -253,14 +261,14 @@ export function buildCustomPlan(spec: WhatIfSpec, accounts: Account[], schedule:
   const hasDiscretionary = schedule.some((e) => e.category === "dining") && schedule.some((e) => e.category === "shopping");
   const planCuts = hasDiscretionary && spec.oneOffAmount && spec.oneOffAmount >= 500 ? { dining: 75, shopping: 75 } : undefined;
   if (planCuts) steps.push("Trim dining and shopping by $75 each a month ($150 a month) to build the savings back up.");
-  steps.push(`Turn on automatic top-ups: PNC Savings refills checking whenever it would drop below ${r(FLOOR)}.`);
+  steps.push(`Turn on automatic top-ups: ${SAV} refills ${INTO} whenever it would drop below ${r(FLOOR)}.`);
 
   const withPlan = run({ ...change, moves: planMoves, cuts: addCuts(change.cuts, planCuts), shield });
   const onDay = spec.oneOffMonth ? asIs.checkingDaily.find((p) => p.date === `${spec.oneOffMonth}-10`) : undefined;
   const warnings = [
     neg(asIs) ? `${neg(asIs)}.` : "",
     onDay && spec.oneOffAmount ? `Paying ${r(spec.oneOffAmount)} from checking on ${shortDay(onDay.date)} would leave it at ${money(onDay.balance)}.` : "",
-    asIs.monthly.shortfall < 0 ? `Bills outrun paychecks by ${r(-asIs.monthly.shortfall)} a month in this future.` : "",
+    asIs.monthly.shortfall < 0 ? `Bills outrun ${pay} by ${r(-asIs.monthly.shortfall)} a month in this future.` : "",
   ].filter(Boolean);
   return {
     id: "custom", title: spec.title, want: spec.want, interpretation: spec.interpretation, warnings, steps,
@@ -270,16 +278,18 @@ export function buildCustomPlan(spec: WhatIfSpec, accounts: Account[], schedule:
 }
 
 /** Facts for the AI explainer — the custom-plan twin of planFacts() in lib/explain.ts. */
-export function customFacts(plan: CustomPlan, accounts: Account[]): string[] {
+export function customFacts(plan: CustomPlan, accounts: Account[], business = false): string[] {
   const m = plan.asIs.monthly;
   const cards = accounts.filter((a) => a.kind === "credit").map((a) => a.id);
+  const pay = business ? "customer payments" : "paychecks";
   return [
+    audienceFact(business ? "business" : "personal"),
     `What-if: ${plan.title}.`,
     `How Foresight read the question: ${plan.interpretation}`,
     `The forecast covers the next 12 months, ${longMonth(plan.asIs.months[0].month)} to ${longMonth(plan.asIs.months.at(-1)!.month)}.`,
     ...accounts.map((a) => `${a.bank} ${a.name} balance today: ${r(a.balance)}.`),
-    `Each month, paychecks bring in ${r(m.income)}, spending is ${r(m.spending)}, loan payments are ${r(m.loanPayments)} and card interest is ${r(m.cardInterest)}.`,
-    m.shortfall < 0 ? `Bills outrun paychecks by ${r(-m.shortfall)} a month.` : `Paychecks cover the bills with ${r(m.shortfall)} a month to spare.`,
+    `Each month, ${pay} bring in ${r(m.income)}, spending is ${r(m.spending)}, loan payments are ${r(m.loanPayments)} and card interest is ${r(m.cardInterest)}.`,
+    m.shortfall < 0 ? `Bills outrun ${pay} by ${r(-m.shortfall)} a month.` : `${pay[0].toUpperCase()}${pay.slice(1)} cover the bills with ${r(m.shortfall)} a month to spare.`,
     `Present-you wants: ${plan.want}`,
     ...plan.warnings.map((w) => `Future-you warns: ${w}`),
     ...plan.steps.map((s, i) => `Plan step ${i + 1}: ${s}`),

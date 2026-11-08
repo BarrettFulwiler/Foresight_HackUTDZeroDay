@@ -40,7 +40,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
   const custom = useMemo(() => (customSpec ? buildCustomPlan(customSpec, accounts, schedule, asOf, cuts) : null), [customSpec, accounts, schedule, asOf, cuts]);
   const plan: Plan | CustomPlan = custom ?? presetPlan;
   const planKey = custom ? `custom:${custom.want}` : preset;
-  const facts = useMemo(() => (custom ? customFacts(custom, accounts) : planFacts(presetPlan, accounts)), [custom, presetPlan, accounts]);
+  const facts = useMemo(() => (custom ? customFacts(custom, accounts, business) : planFacts(presetPlan, accounts)), [custom, presetPlan, accounts]);
 
   const nessie = (id: string) => accounts.find((a) => a.id === id)?.nessieId;
   const mainChecking = accounts.find((a) => a.id === plan.asIs.checkingId);
@@ -97,7 +97,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
             </ul>
           </section>
           {/* For a typed what-if, future-you's Gemini reply is already in the chat above; the note card is for presets. */}
-          {!custom && <FutureNote facts={facts} />}
+          {!custom && <FutureNote facts={facts} audience={business ? "business" : "personal"} />}
           {custom && (
             <section className={`${styles.panel} ${styles.voice} ${styles.noteCard}`} aria-label="How future-you read it">
               <p className={styles.voiceLabel}>How future-you read it</p>
@@ -272,7 +272,7 @@ type NoteState =
 const modelName = (m: string) => m.replace(/^gemini-/, "Gemini ").replace(/-/g, " ").replace(/\b[a-z]/g, (c) => c.toUpperCase());
 
 // Gemini writes a note in future-you's voice from the plan's facts; the server checks every number before it's shown.
-function FutureNote({ facts }: { facts: string[] }) {
+function FutureNote({ facts, audience }: { facts: string[]; audience: "personal" | "business" }) {
   const key = facts.join("\n");
   const [notes, setNotes] = useState<Record<string, NoteState>>({});
   const note = notes[key];
@@ -282,7 +282,7 @@ function FutureNote({ facts }: { facts: string[] }) {
     setNotes((n) => ({ ...n, [key]: { status: "loading" } }));
     let next: NoteState;
     try {
-      const res = await fetch("/api/explain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts, fresh }) });
+      const res = await fetch("/api/explain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts, fresh, audience }) });
       const data = await res.json().catch(() => ({}));
       next = res.ok ? { status: "done", ...data } : { status: "error", error: data.error ?? "Gemini didn't answer. Try again." };
     } catch {

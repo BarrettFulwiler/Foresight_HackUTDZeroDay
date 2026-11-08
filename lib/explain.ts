@@ -20,6 +20,23 @@ export function unverified(text: string, facts: string[]): string[] {
 export const splitNumbers = (text: string) =>
   text.split(/(-?\$\d+(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?%|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}(?:st|nd|rd|th)?\b)/);
 
+export type Audience = "personal" | "business";
+
+// Who Gemini is talking to. Added to every Advising prompt, so a company owner never hears about paychecks or trips.
+export const AUDIENCE_RULES: Record<Audience, string> = {
+  personal: `Who you're talking to: one person about their own money (paychecks, rent and bills, their savings, personal goals like a trip). Speak as their future self.
+- Never call it a business or mention payroll, vendors, customers or revenue.`,
+  business: `Who you're talking to: the owner of a small business, about the company's money, not their personal finances. Speak as the owner a year from now, looking back on how the business did.
+- Say "the business", "the company" or "your company". Use business terms: customer payments or revenue, payroll, vendors, operating account, cash reserve, runway, line of credit.
+- Never mention paychecks, rent, personal trips, a personal credit score, retirement or "your savings" as if it were the owner's own money.`,
+};
+
+/** The first fact in every list, so the audience is in the facts as well as the rules. */
+export const audienceFact = (audience: Audience) =>
+  audience === "business" ? "This is a business: every account and number below is the company's, not the owner's personal money." : "This is a person's own money: every account and number below is theirs.";
+
+export const toAudience = (v: unknown): Audience => (v === "business" ? "business" : "personal");
+
 export function planFacts(plan: Plan, accounts: Account[]): string[] {
   const r = (n: number) => money(n, false);
   const m = plan.asIs.monthly;
@@ -28,6 +45,7 @@ export function planFacts(plan: Plan, accounts: Account[]): string[] {
   const pay = business ? "customer payments" : "paychecks";
   const cards = accounts.filter((a) => a.kind === "credit").map((a) => a.id);
   return [
+    audienceFact(business ? "business" : "personal"),
     `What-if: ${title}.`,
     `The forecast covers the next 12 months, ${longMonth(plan.asIs.months[0].month)} to ${longMonth(plan.asIs.months.at(-1)!.month)}.`,
     `Each month, ${pay} bring in ${r(m.income)}, spending is ${r(m.spending)}, loan payments are ${r(m.loanPayments)} and card interest is ${r(m.cardInterest)}.`,

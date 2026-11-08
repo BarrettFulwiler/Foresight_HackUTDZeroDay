@@ -1,22 +1,47 @@
 import type { Account } from "./finance";
-import { type NessieAccount, getAccount, listCustomerAccounts, nessieConfigured } from "./nessie";
+import { type NessieAccount, getAccount, listCustomerAccounts, nessieConfigured, nessieGet } from "./nessie";
 
-// Which app accounts are mirrored in Nessie. The IDs live in .env.local (they belong to one Nessie key).
-// PNC's history and analysis come from PNC's CSVs; Nessie holds the live balances and moves the money.
-const LINKS: { accountId: string; env: string }[] = [
-  { accountId: "A-C005-CHECKING", env: "NESSIE_PNC_CHECKING_ID" },
-  { accountId: "A-C005-SAVINGS", env: "NESSIE_PNC_SAVINGS_ID" },
-  { accountId: "A-C005-CREDIT_CARD", env: "NESSIE_PNC_CARD_ID" },
-  { accountId: "COF-CHECKING", env: "NESSIE_CHECKING_ID" },
-  { accountId: "COF-SAVINGS", env: "NESSIE_SAVINGS_ID" },
-  { accountId: "COF-CARD", env: "NESSIE_CARD_ID" },
+// Which app accounts are mirrored in Nessie. PNC's history and analysis come from PNC's CSVs; Nessie holds the
+// live balances and moves the money. The IDs can be pinned in .env (they belong to one Nessie key); any left empty
+// are found by name: the demo customer (NESSIE_DEMO_CUSTOMER, default "Alex Rivera") and each account's nickname.
+const LINKS: { accountId: string; env: string; nickname: string }[] = [
+  { accountId: "A-C005-CHECKING", env: "NESSIE_PNC_CHECKING_ID", nickname: "PNC Checking" },
+  { accountId: "A-C005-SAVINGS", env: "NESSIE_PNC_SAVINGS_ID", nickname: "PNC Savings" },
+  { accountId: "A-C005-CREDIT_CARD", env: "NESSIE_PNC_CARD_ID", nickname: "PNC Credit card" },
+  { accountId: "COF-CHECKING", env: "NESSIE_CHECKING_ID", nickname: "Capital One Checking" },
+  { accountId: "COF-SAVINGS", env: "NESSIE_SAVINGS_ID", nickname: "Capital One Savings" },
+  { accountId: "COF-CARD", env: "NESSIE_CARD_ID", nickname: "Capital One Credit card" },
 ];
 
 export type LiveResult = { accounts: Account[]; source: "nessie" | "demo"; error?: string };
 
-/** The Nessie account IDs the app is allowed to move money between. */
-export function linkedNessieIds() {
-  return new Set(LINKS.map((l) => process.env[l.env]).filter((v): v is string => Boolean(v)));
+type Customer = { id: string; first_name?: string; last_name?: string };
+let demoCustomer: Promise<string> | null = null;
+
+/** The demo customer's Nessie ID: NESSIE_CUSTOMER_ID if set, otherwise looked up by name once and remembered. */
+function demoCustomerId(): Promise<string> {
+  if (process.env.NESSIE_CUSTOMER_ID) return Promise.resolve(process.env.NESSIE_CUSTOMER_ID);
+  demoCustomer ??= (async () => {
+    const want = (process.env.NESSIE_DEMO_CUSTOMER || "Alex Rivera").toLowerCase();
+    let cursor = "";
+    do {
+      const page = await nessieGet<{ items: Customer[]; next_cursor?: string }>(`/customers?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+      const hit = page.items.find((c) => `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim().toLowerCase() === want);
+      if (hit) return hit.id;
+      cursor = page.next_cursor ?? "";
+    } while (cursor);
+    return "";
+  })().catch((e) => {
+    demoCustomer = null; // try again on the next request
+    throw e;
+  });
+  return demoCustomer;
+}
+
+/** The Nessie account IDs the app is allowed to move money between (the demo customer's linked accounts). */
+export async function linkedNessieIds(): Promise<Set<string>> {
+  const byId = await liveById();
+  return new Set([...byId.values()].map((a) => a.id));
 }
 
 // Nessie rate-limits bursts (a page load plus the dashboard right after it was enough), and a failed
@@ -34,15 +59,18 @@ export function invalidateLiveBalances() {
 }
 
 async function readNessie(): Promise<Map<string, NessieAccount>> {
-  const customer = process.env.NESSIE_CUSTOMER_ID;
-  const byNessieId = new Map<string, NessieAccount>();
-  if (customer) for (const a of await listCustomerAccounts(customer)) byNessieId.set(a.id, a);
+  const customer = await demoCustomerId();
+  const owned = customer ? await listCustomerAccounts(customer) : [];
+  const byNessieId = new Map(owned.map((a) => [a.id, a]));
+  const byNickname = new Map(owned.map((a) => [a.nickname.toLowerCase(), a]));
   const byId = new Map<string, NessieAccount>();
   for (const l of LINKS) {
     const id = process.env[l.env];
-    if (!id) continue;
-    byId.set(l.accountId, byNessieId.get(id) ?? (await getAccount(id))); // per-account call only if the list missed it
+    // A pinned ID wins (per-account call only if the customer's list missed it); otherwise match the nickname.
+    const account = id ? (byNessieId.get(id) ?? (await getAccount(id))) : byNickname.get(l.nickname.toLowerCase());
+    if (account) byId.set(l.accountId, account);
   }
+  if (byId.size === 0) throw new Error("No linked Nessie accounts: set NESSIE_CUSTOMER_ID, or seed the demo customer");
   return byId;
 }
 

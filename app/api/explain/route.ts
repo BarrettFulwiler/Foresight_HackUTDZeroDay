@@ -1,7 +1,7 @@
-// POST { facts: string[], fresh?: boolean } → a note from future-you, written by Gemini from the forecast's facts.
+// POST { facts: string[], fresh?: boolean, audience?: "personal" | "business" } → a note from future-you, written by Gemini from the forecast's facts.
 // Every number in the reply must already be in the facts; otherwise Gemini gets one retry, then the note is refused.
 import { NextResponse } from "next/server";
-import { numbersIn, unverified } from "../../../lib/explain";
+import { AUDIENCE_RULES, numbersIn, toAudience, unverified } from "../../../lib/explain";
 import { GeminiError, generateJson } from "../../../lib/gemini";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,9 @@ export async function POST(req: Request) {
   if (!Array.isArray(facts) || facts.length === 0 || facts.length > 40 || !facts.every((f) => typeof f === "string" && f.length <= 500)) {
     return NextResponse.json({ error: "Send the plan's facts as a list of sentences." }, { status: 400 });
   }
-  const key = facts.join("\n");
+  const audience = toAudience(body?.audience);
+  const system = `${SYSTEM}\n\n${AUDIENCE_RULES[audience]}`;
+  const key = `${audience}\n${facts.join("\n")}`;
   const hit = cache.get(key);
   if (hit && !body?.fresh) return NextResponse.json(hit);
 
@@ -46,7 +48,7 @@ export async function POST(req: Request) {
   try {
     let feedback = "";
     for (let attempt = 0; attempt < 2; attempt++) {
-      const { data, model } = await generateJson<Note>({ system: SYSTEM, input: input + feedback, schema: SCHEMA });
+      const { data, model } = await generateJson<Note>({ system, input: input + feedback, schema: SCHEMA });
       const headline = String(data?.headline ?? "").trim();
       const message = String(data?.message ?? "").trim();
       if (!headline || !message) {

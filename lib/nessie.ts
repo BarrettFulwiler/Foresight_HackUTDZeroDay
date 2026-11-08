@@ -68,6 +68,8 @@ export function createTransfer(fromId: string, toId: string, amountCents: number
 // Ends the pending window early. On the hosted API the money still moves on the next
 // once-a-minute sweep, so callers should poll getTransaction until it completes.
 export const settleEarly = (id: string) => call<NessieTxn>(`/transactions/${id}/settle`, { method: "POST" });
+/** Voids a pending transaction; the hold on the sending account is released. */
+export const cancelTransaction = (id: string) => call<NessieTxn>(`/transactions/${id}/cancel`, { method: "POST" });
 
 /** A GET for routes this file doesn't wrap yet (used by lib/companies.ts). Waits and retries when Nessie rate-limits. */
 export async function nessieGet<T>(path: string): Promise<T> {
