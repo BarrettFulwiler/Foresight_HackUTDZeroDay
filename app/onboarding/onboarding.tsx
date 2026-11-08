@@ -5,6 +5,7 @@ import { BRAND } from "../../lib/brand";
 import { categoryMeta, longMonth, money, shortMonth } from "../../lib/format";
 import { DEMO_BUSINESS_PREFS, DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, monthsUntil, savePrefs } from "../../lib/prefs";
 import type { Summary } from "../../lib/summary";
+import DatePicker, { formatDate } from "./date-picker";
 import styles from "./onboarding.module.css";
 
 const STEPS = ["Who it's for", "Location", "Your view", "Goals", "Consent"];
@@ -69,7 +70,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
     true,
     Boolean(p.state),
     true,
-    p.goals.length > 0 && p.goal.target > 0 && /^\d{4}-\d{2}$/.test(p.goal.by),
+    p.goals.length > 0 && p.goal.target > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.goal.by),
     p.consent.pnc && p.consent.disclaimer,
   ][step];
 
@@ -204,13 +205,14 @@ export default function Onboarding({ summary }: { summary: Summary }) {
                     <label className={styles.field}>{business ? "Set aside so far ($)" : "Saved so far ($)"}
                       <input inputMode="numeric" value={p.goal.saved || ""} onChange={(e) => setGoal({ saved: Number(e.target.value.replace(/\D/g, "")) })} placeholder="0" />
                     </label>
-                    <label className={styles.field}>By
-                      <input type="month" min={nextMonth} value={p.goal.by} onChange={(e) => setGoal({ by: e.target.value })} />
-                    </label>
+                    <div className={styles.field}>
+                      <span id="goal-by-label">By</span>
+                      <DatePicker labelledBy="goal-by-label" min={`${nextMonth}-01`} value={p.goal.by.length === 10 ? p.goal.by : ""} onChange={(by) => setGoal({ by })} />
+                    </div>
                   </div>
                   {p.goal.target > 0 && p.goal.by && (
                     <p className={styles.goalMath}>
-                      That&rsquo;s <strong>{money(perMonth, false)} a month</strong> for {monthsLeft} month{monthsLeft === 1 ? "" : "s"} to reach {money(p.goal.target, false)} by {longMonth(p.goal.by)}.
+                      That&rsquo;s <strong>{money(perMonth, false)} a month</strong> for {monthsLeft} month{monthsLeft === 1 ? "" : "s"} to reach {money(p.goal.target, false)} by {p.goal.by.length === 10 ? formatDate(p.goal.by) : longMonth(p.goal.by)}.
                     </p>
                   )}
                 </div>

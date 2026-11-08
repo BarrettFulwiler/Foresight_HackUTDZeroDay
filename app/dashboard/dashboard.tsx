@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Account, DashboardData, ScheduleEvent } from "../../lib/finance";
 import { BRAND } from "../../lib/brand";
+import { SignOutButton } from "@clerk/nextjs";
 import { categoryTotals, monthlyTotals, runForecast, type Forecast } from "../../lib/forecast";
 import { categoryMeta, longMonth, money } from "../../lib/format";
 import { shortDay } from "../../lib/plans";

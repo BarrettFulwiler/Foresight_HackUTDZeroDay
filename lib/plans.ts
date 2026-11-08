@@ -5,6 +5,12 @@ import { payoffEffect, runForecast, type Forecast, type Scenario } from "./forec
 import { longMonth, money, shortMonth } from "./format";
 import type { Prefs } from "./prefs";
 
+const dayBefore = (ymd: string) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d - 1));
+  return t.toISOString().slice(0, 10);
+};
+
 export type PresetId = "trip" | "payoff" | "emergency";
 export type BusinessPresetId = "slow" | "equipment" | "cardpayoff"; // lib/business-plans.ts
 export type NowMove = { fromId: string; toId: string; amount: number; label: string }; // app account ids
@@ -83,7 +89,9 @@ export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleE
     const target = goal && goal.target > 0 ? goal.target : 1500;
     const by = goal?.by || "2027-03";
     const label = goal?.label || "Trip";
-    const tripDate = `${by}-10`;
+    // A goal date picked in onboarding is a full day; older setups only stored the month, so assume the 10th.
+    const tripDate = /^\d{4}-\d{2}-\d{2}$/.test(by) ? by : `${by}-10`;
+    const moveDate = dayBefore(tripDate);
     const trip: Scenario = { extra: [{ date: tripDate, accountId: checking.id, delta: -target, label }] };
     const asIs = run(trip);
     const bridge = bridgeFor(asIs);
@@ -91,7 +99,7 @@ export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleE
       ...trip,
       moves: [
         ...(bridge && cofSavings ? [{ date: tomorrow, fromId: cofSavings.id, toId: checking.id, amount: bridge, label: "Bridge to checking" }] : []),
-        { date: `${by}-09`, fromId: pncSavings.id, toId: checking.id, amount: target, label: "Move trip money from savings" },
+        { date: moveDate, fromId: pncSavings.id, toId: checking.id, amount: target, label: "Move trip money from savings" },
       ],
       cuts: { dining: 75, shopping: 75 },
       shield,
@@ -109,7 +117,7 @@ export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleE
       steps: [
         ...(bridge ? [`Move ${r(bridge)} from Capital One Savings to PNC Checking now, to get past the next two months of bills.`] : []),
         "Trim dining and shopping by $75 each a month ($150 a month).",
-        `On ${shortDay(`${by}-09`)}, move the trip's ${r(target)} from PNC Savings into checking.`,
+        `On ${shortDay(moveDate)}, move the trip's ${r(target)} from PNC Savings into checking.`,
         `Turn on automatic top-ups: PNC Savings refills checking whenever it would drop below ${r(FLOOR)}.`,
       ],
       outcome: [
