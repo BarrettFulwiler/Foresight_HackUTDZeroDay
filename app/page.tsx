@@ -74,7 +74,7 @@ export default function Landing() {
     <main className={styles.page}>
       <header className={styles.nav}>
         <a className={styles.brand} href="/">
-          <span className={styles.mark} aria-hidden="true" />
+          <img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />
           {BRAND}
         </a>
         <nav className={styles.navLinks} aria-label="Main">

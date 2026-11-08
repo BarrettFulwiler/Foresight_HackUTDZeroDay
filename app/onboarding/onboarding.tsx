@@ -83,7 +83,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   return (
     <main className={styles.page}>
       <header className={styles.top}>
-        <a className={styles.brand} href="/"><span className={styles.mark} aria-hidden="true" />{BRAND}</a>
+        <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
         <button type="button" className={styles.skip} onClick={() => finish({ ...DEMO_PREFS, name: p.name || DEMO_PREFS.name })}>Skip, use demo profile</button>
       </header>
 

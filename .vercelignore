@@ -1,0 +1,4 @@
+# Never upload local secrets with a CLI deploy. Set them in Vercel's Environment Variables instead.
+.env*
+!.env.example
+DEVPOST.md
