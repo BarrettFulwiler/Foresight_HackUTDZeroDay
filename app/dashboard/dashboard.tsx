@@ -600,7 +600,7 @@ function Move({ accounts, source, sourceError, receipts, onTransfer, onCancel }:
           <button type="button" className={styles.primaryBtn} disabled={Boolean(problem) || busy} onClick={submit}>
             {busy ? "Sending…" : `Transfer ${value > 0 ? money(value) : ""}`}
           </button>
-          <p className={styles.note}>{problem || "The money is held the moment you send it. Nessie's sandbox posts it on its next sweep, usually within a minute."}</p>
+          {problem && <p className={styles.note}>{problem}</p>}
         </div>
       </section>
 
@@ -693,7 +693,7 @@ function EditDisplay({ display, onSet, edited, onReset, onOpen, hidden, personal
   return (
     <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="display-title">
       <h2 id="display-title" className={styles.cardTitle}>Display</h2>
-      <p className={styles.cardSub}>Choose how each card on View shows your data. Changes apply right away and are saved on this device.</p>
+      <p className={styles.cardSub}>Choose how each card on View shows your data.</p>
       <ul className={styles.displayList}>
         {DISPLAY_CARDS.filter((card) => personal || !card.personalOnly).map((card) => (
           <li key={card.id} className={hidden.includes(card.id as ViewCardId) ? styles.displayOff : undefined}>
@@ -758,7 +758,7 @@ function EditBudgets({ typical, budgets, onChange, cuts, accounts, schedule, asO
     <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="edit-title">
       <h2 id="edit-title" className={styles.cardTitle}>Edit monthly budget</h2>
       <p className={styles.cardSub}>
-        Starts from your typical month (the average of your last 3). Changes update the forecast everywhere: the health cards on View and every plan on Advising. Saved on this device.
+        Starts from your typical month (the average of your last 3). Changes update the forecast everywhere: the health cards on View and every plan on Advising.
       </p>
       <ul className={styles.editList}>
         {cats.map((k, i) => {

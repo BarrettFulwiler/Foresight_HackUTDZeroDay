@@ -137,9 +137,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
                   : "Nessie isn't connected, so the plan can't be applied right now."}
               </p>
             </>
-          ) : (
-            <p className={styles.note}>Nothing to move right now. The rest of the plan is simulated in the forecast.</p>
-          )}
+          ) : null}
         </div>
 
         {myReceipts.length > 0 && (
@@ -259,7 +257,6 @@ function WhatIfChat({ onResult, activeTitle, cuts, companyId }: { onResult: (spe
           {sending ? "Running…" : "Ask future-you"}
         </button>
       </form>
-      <p className={styles.note}>Gemini reads your question and writes the reply. The numbers in between are never Gemini&rsquo;s: Foresight calculates them from your accounts and checks every number in the reply.</p>
     </div>
   );
 }
@@ -308,7 +305,7 @@ function FutureNote({ facts, audience }: { facts: string[]; audience: "personal"
         <p className={styles.note}>
           {note?.status === "loading"
             ? "Gemini is writing, and Foresight will check every number against the forecast…"
-            : "Gemini turns this forecast into a note from future-you. It sees only the calculated facts below, never your name or account numbers, and Foresight checks every number it writes."}
+            : "Gemini turns this forecast into a note from future-you. It sees only the calculated facts, never your name or account numbers, and Foresight checks every number it writes."}
         </p>
       )}
       {prev?.status === "error" && <p className={styles.receiptErr} role="alert">{prev.error}</p>}
@@ -317,12 +314,6 @@ function FutureNote({ facts, audience }: { facts: string[]; audience: "personal"
           {note?.status === "loading" ? "Writing…" : note?.status === "done" ? "Write another" : "Explain it with Gemini"}
         </button>
       </div>
-      <details className={styles.noteFacts}>
-        <summary>What Gemini sees ({facts.length} facts)</summary>
-        <ul>
-          {facts.map((f, i) => <li key={i}>{f}</li>)}
-        </ul>
-      </details>
     </section>
   );
 }
