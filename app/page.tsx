@@ -9,7 +9,9 @@ import { buildCustomPlan, horizonMonths } from "../lib/whatif";
 import { AskCard, FuturesCard } from "./landing-futures";
 
 // Opens the dashboard straight away with the demo profile (see app/onboarding).
+// Every visit goes the same way: landing → sign in (or skip to the demo) → onboarding → the dashboard.
 const DEMO_HREF = "/onboarding?demo=1";
+const START_HREF = "/start";
 // The demo profile's goal (same as DEMO_PREFS in lib/prefs.ts), so the landing matches the demo.
 const DEMO_GOAL: Prefs["goal"] = { kind: "trip", label: "Trip to Cancún", target: 1500, saved: 960, by: "2027-03" };
 const ASK_EXAMPLE = "Can I afford a $3,000 car repair next month?";
@@ -75,7 +77,7 @@ export default async function Landing() {
         <nav className={styles.navLinks} aria-label="Main">
           <a href="#how">How it works</a>
           <a href="/start?mode=signin">Sign in</a>
-          <a className={styles.navCta} href={DEMO_HREF}>Try the demo</a>
+          <a className={styles.navCta} href={START_HREF}>Get started</a>
         </nav>
       </header>
 
@@ -88,12 +90,12 @@ export default async function Landing() {
             what-if, and you get a plan you approve before any money moves.
           </p>
           <div className={styles.ctas}>
-            <a className={styles.primary} href={DEMO_HREF}>Try the demo</a>
-            <a className={styles.secondary} href="#how">How it works</a>
+            <a className={styles.primary} href={START_HREF}>Sign in or create an account</a>
+            <a className={styles.secondary} href={DEMO_HREF}>Skip to the demo</a>
           </div>
           <p className={styles.micro}>
-            The demo starts with a quick setup where you pick personal or business, then opens the dashboard, using PNC&rsquo;s synthetic customer data and Capital One&rsquo;s Nessie
-            sandbox. No real accounts or money.
+            Either way, a quick setup comes next: pick personal or business, then you&rsquo;re in the dashboard. The demo uses
+            PNC&rsquo;s synthetic customer data and Capital One&rsquo;s Nessie sandbox. No real accounts or money.
           </p>
           <ul className={styles.proof}>
             <li><strong>Day by day</strong><span>Every account projected 12 months ahead</span></li>
@@ -170,10 +172,10 @@ export default async function Landing() {
 
       <section className={`${styles.wrap} ${styles.tryIt}`} aria-labelledby="try-title">
         <h2 id="try-title" className={styles.h2}>See where your money is headed.</h2>
-        <p className={styles.body}>Pick personal or business, click through the pre-filled setup, and land on the forecast.</p>
+        <p className={styles.body}>Sign in or skip to the demo, pick personal or business in a quick setup, and land on the forecast.</p>
         <div className={styles.ctas}>
-          <a className={styles.primary} href={DEMO_HREF}>Try the demo</a>
-          <a className={styles.secondary} href="/onboarding">Set up your own view</a>
+          <a className={styles.primary} href={START_HREF}>Sign in or create an account</a>
+          <a className={styles.secondary} href={DEMO_HREF}>Skip to the demo</a>
         </div>
       </section>
 

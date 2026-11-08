@@ -1016,7 +1016,8 @@
   padding: 20px 20px 16px 52px;
   color: #fff;
   overflow: hidden;
-  box-shadow: 0 14px 28px #1a66ad2e;
+  background: var(--kind, #1a66ad);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--kind, #1a66ad) 22%, transparent);
 }
 
 .acctLead {
@@ -1024,32 +1025,17 @@
   min-height: 190px;
 }
 
-.acct_cash {
-  background: #1a66ad;
-}
-
-.acct_investment {
-  background: #0f7c80;
-  box-shadow: 0 14px 28px #0f766e2e;
-}
-
-.acct_credit {
-  background: #3d4a59;
-  box-shadow: 0 14px 28px #3730a32e;
-}
-
-.acct_loan {
-  background: #1f2933;
-  box-shadow: 0 14px 28px #1118272e;
-}
-
-.acct.acctAlt {
-  background: #0b5e8a;
-  box-shadow: 0 14px 28px #0e74902e;
-}
-
-.acct.acct_credit.acctAlt {
-  background: #a33a2c;
+/* The kind of account, as a small label above the balance (matches the chip colors above the cards). */
+.acctKind {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ffffff2b;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
 }
 
 .acctWatermark {
@@ -3291,3 +3277,31 @@
   color: var(--muted);
 }
 
+
+/* ---------- Money summary: color key ---------- */
+.summaryChips .kindChip {
+  background: color-mix(in srgb, var(--kind) 7%, #ffffff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind) 30%, transparent);
+}
+
+.kindChip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kindChip i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--kind);
+}
+
+.kindDot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: 0;
+}

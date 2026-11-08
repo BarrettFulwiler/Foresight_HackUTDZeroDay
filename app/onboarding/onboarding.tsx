@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { BRAND } from "../../lib/brand";
 import { categoryMeta, longMonth, money, shortMonth } from "../../lib/format";
 import { markDemo } from "../../lib/auth-client";
-import { DEMO_BUSINESS_PREFS, DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, monthsUntil, savePrefs } from "../../lib/prefs";
+import { DEMO_BUSINESS_PREFS, DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, loadPrefs, monthsUntil, savePrefs } from "../../lib/prefs";
 import type { Summary } from "../../lib/summary";
 import DatePicker, { formatDate } from "./date-picker";
 import styles from "./onboarding.module.css";
@@ -32,7 +32,9 @@ const BLANK: Prefs = {
   consent: { pnc: false, capitalOne: false, disclaimer: false },
 };
 
-export default function Onboarding({ summary }: { summary: Summary }) {
+// member: the signed-in account. Its type (personal or company) was chosen at sign-up, so it's fixed here.
+// resume: a returning member who already finished setup in this browser goes straight to their dashboard.
+export default function Onboarding({ summary, member, resume = false }: { summary: Summary; member?: { name: string; type: Prefs["accountType"] }; resume?: boolean }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [p, setP] = useState<Prefs>(BLANK);
@@ -47,10 +49,20 @@ export default function Onboarding({ summary }: { summary: Summary }) {
       setP({ ...DEMO_PREFS, completedAt: "" });
       return;
     }
+    if (member) {
+      const saved = loadPrefs();
+      if (resume && saved?.completedAt && saved.accountType === member.type) {
+        router.replace(member.type === "company" ? "/dashboard/company" : "/dashboard");
+        return;
+      }
+      setP((cur) => ({ ...cur, accountType: member.type, name: member.type === "company" ? member.name : member.name.split(" ")[0] }));
+      return;
+    }
     try {
       const pending = JSON.parse(sessionStorage.getItem("foresight.pending") || "{}");
       setP((cur) => ({ ...cur, name: pending.name || cur.name, email: pending.email || cur.email }));
     } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const set = <K extends keyof Prefs>(k: K, v: Prefs[K]) => setP((cur) => ({ ...cur, [k]: v }));
@@ -61,7 +73,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   const demoFor = (accountType: Prefs["accountType"]) => (accountType === "company" ? DEMO_BUSINESS_PREFS : DEMO_PREFS);
   const setType = (accountType: Prefs["accountType"]) =>
     setP((cur) => {
-      if (cur.accountType === accountType) return cur;
+      if (cur.accountType === accountType || member) return cur; // a member's type was set at sign-up
       const goals = demo ? { goals: demoFor(accountType).goals, goal: demoFor(accountType).goal } : { goals: [], goal: BLANK.goal };
       return { ...cur, accountType, ...goals };
     });
@@ -119,7 +131,11 @@ export default function Onboarding({ summary }: { summary: Summary }) {
             <>
               <h1 className={styles.stepTitle}>{p.name ? `Hi ${p.name}! ` : ""}Who is this for?</h1>
               <p className={styles.stepSub}>
-                {demo ? "Demo: pick personal or business. Every step is already filled in, so just press Continue." : "We’ll tailor what you see to how you use money."}
+                {demo
+                  ? "Demo: pick personal or business. Every step is already filled in, so just press Continue."
+                  : member
+                    ? `You signed up as ${member.type === "company" ? "a business" : "an individual"}, so this is set. Press Continue.`
+                    : "We’ll tailor what you see to how you use money."}
               </p>
               <div className={styles.choices} role="radiogroup" aria-label="Account type">
                 <Choice checked={p.accountType === "individual"} title="Just me" text="My own accounts, bills and goals." onSelect={() => setType("individual")} />

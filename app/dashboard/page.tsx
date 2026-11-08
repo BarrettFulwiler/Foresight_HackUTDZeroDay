@@ -17,6 +17,7 @@ export default async function DashboardPage() {
   const member = await currentMember();
   const demo = (await cookies()).get(DEMO_COOKIE)?.value === "1";
   if (authConfigured() && !member && !demo) redirect("/start?mode=signin&error=signin_required");
+  if (member?.type === "company") redirect("/dashboard/company"); // a business account goes to its own dashboard
   const data = getDashboardData("C005");
   const live = await withLiveBalances(data.accounts);
   return <Dashboard data={{ ...data, accounts: live.accounts }} source={live.source} sourceError={live.error} member={member ? { name: member.name, type: member.type } : undefined} />;

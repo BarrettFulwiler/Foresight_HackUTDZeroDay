@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { DEMO_COOKIE, authConfigured, currentMember } from "../../../lib/auth";
 import { BRAND } from "../../../lib/brand";
 import { getRandomCompany } from "../../../lib/companies";
 import { companyDashboardData, todayIso } from "../../../lib/company-dashboard";
@@ -11,10 +14,15 @@ export const dynamic = "force-dynamic"; // a different company is pulled from Ne
 // The company dashboard: the same dashboard and tools as the individual one, on a seeded Nessie company's data.
 // Reached by choosing "My company" in onboarding.
 export default async function CompanyPage() {
+  // Same gate as the personal dashboard: signed-in members and demo visitors. A personal account goes to its own.
+  const member = await currentMember();
+  const demo = (await cookies()).get(DEMO_COOKIE)?.value === "1";
+  if (authConfigured() && !member && !demo) redirect("/start?mode=signin&error=signin_required");
+  if (member?.type === "individual") redirect("/dashboard");
   const result = await getRandomCompany();
   if ("company" in result) {
     const { data, info } = companyDashboardData(result.company, todayIso());
-    return <Dashboard data={data} source="nessie" company={info} />;
+    return <Dashboard data={data} source="nessie" company={info} member={member ? { name: member.name, type: member.type } : undefined} />;
   }
   return (
     <main className={base.page}>

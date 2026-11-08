@@ -39,7 +39,8 @@ export async function finishSignIn(): Promise<string> {
   if (!userId) return "/start?mode=signin";
   const client = await clerkClient();
   const user = await client.users.getUser(userId);
-  if ((user.publicMetadata as Partial<Member>).nessieCustomerId) return "/dashboard";
+  // Returning members pass through onboarding too: it forwards them to their dashboard if this browser already has their setup.
+  if ((user.publicMetadata as Partial<Member>).nessieCustomerId) return "/onboarding?resume=1";
 
   const d = user.unsafeMetadata as Details;
   const type: AccountType | null = d.type === "company" ? "company" : d.type === "individual" ? "individual" : null;
@@ -51,7 +52,7 @@ export async function finishSignIn(): Promise<string> {
     return "/start?mode=signin&error=no_account";
   }
 
-  if (settingUp.has(userId)) return "/dashboard"; // a double click is already creating this account
+  if (settingUp.has(userId)) return "/onboarding"; // a double click is already creating this account
   settingUp.add(userId);
   let customerId = "";
   try {
@@ -67,7 +68,7 @@ export async function finishSignIn(): Promise<string> {
     const name = type === "company" ? companyName : `${firstName} ${lastName}`;
     await client.users.updateUser(userId, type === "company" ? { firstName: companyName } : { firstName, lastName });
     await client.users.updateUserMetadata(userId, { publicMetadata: { type, name, nessieCustomerId: customerId } });
-    return type === "individual" ? "/onboarding" : "/dashboard";
+    return "/onboarding"; // personal and business both set up their view next
   } catch {
     if (customerId) await deleteCustomer(customerId);
     return "/start?mode=signup&error=failed";

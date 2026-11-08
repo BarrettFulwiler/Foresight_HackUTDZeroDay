@@ -12,6 +12,8 @@ const GROUPS: { kind: AccountKind; label: string }[] = [
   { kind: "loan", label: "Loans" },
 ];
 
+const ONE: Record<AccountKind, string> = { cash: "Cash", investment: "Investment", credit: "Credit card", loan: "Loan" };
+
 const CAPTION: Record<AccountKind, string> = {
   cash: "Available balance",
   investment: "Current value",
@@ -29,7 +31,9 @@ function cardDetail(a: Account) {
   return a.type === "savings" ? "Savings" : "Everyday spending";
 }
 
-const KIND_COLOR: Record<AccountKind, string> = { cash: "#16a34a", investment: "#3b82f6", credit: "#f97316", loan: "#dc2626" };
+// One color per kind of account, used on every layout (cards, chips, have vs. owe, table): cool colors for what
+// you have, warm colors for what you owe. The bank is in the text, not the color.
+const KIND_COLOR: Record<AccountKind, string> = { cash: "#1a66ad", investment: "#2e7d4f", credit: "#b45309", loan: "#9f1239" };
 
 // What you have next to what you owe, on one scale, with net worth and each account's share of its side.
 function HaveOwe({ accounts, owned, owed }: { accounts: Account[]; owned: number; owed: number }) {
@@ -103,8 +107,11 @@ export default function MoneySummary({ accounts, source, layout = "cards", busin
       <div className={styles.summaryChips}>
         <div><span>You have</span><strong className={styles.pos}>{money(owned, false)}</strong></div>
         <div><span>You owe</span><strong className={styles.neg}>{money(owed, false)}</strong></div>
-        {GROUPS.map((g) => (
-          <div key={g.kind}><span>{g.label}</span><strong>{money(total(g.kind), false)}</strong></div>
+        {GROUPS.filter((g) => accounts.some((a) => a.kind === g.kind)).map((g) => (
+          <div key={g.kind} className={styles.kindChip} style={{ "--kind": KIND_COLOR[g.kind] } as React.CSSProperties}>
+            <span><i aria-hidden="true" />{g.label}</span>
+            <strong>{money(total(g.kind), false)}</strong>
+          </div>
         ))}
       </div>
 
@@ -129,7 +136,7 @@ export default function MoneySummary({ accounts, source, layout = "cards", busin
                     {a.bank} {a.name} <span className={styles.tableMuted}>••{a.mask}</span>
                     {a.live && <span className={styles.tableLive} title="Balance comes live from Nessie">Live</span>}
                   </th>
-                  <td>{GROUPS.find((g) => g.kind === a.kind)?.label}</td>
+                  <td><span className={styles.kindDot} style={{ background: KIND_COLOR[a.kind] }} aria-hidden="true" />{GROUPS.find((g) => g.kind === a.kind)?.label}</td>
                   <td className={styles.tableMuted}>{cardDetail(a)}{a.pending ? ` · ${money(a.pending)} pending` : ""}</td>
                   <td className={`${styles.num} ${a.kind === "credit" || a.kind === "loan" ? styles.neg : ""}`}>{a.kind === "credit" || a.kind === "loan" ? "-" : ""}{money(a.balance)}</td>
                 </tr>
@@ -140,9 +147,10 @@ export default function MoneySummary({ accounts, source, layout = "cards", busin
       ) : (
       <div className={styles.rail} ref={rail} tabIndex={0} aria-label="Accounts">
         {sorted.map((a, i) => (
-          <article key={a.id} className={`${styles.acct} ${styles[`acct_${a.kind}`]} ${a.bank === "Capital One" ? styles.acctAlt : ""} ${i === 0 ? styles.acctLead : ""}`}>
+          <article key={a.id} className={`${styles.acct} ${i === 0 ? styles.acctLead : ""}`} style={{ "--kind": KIND_COLOR[a.kind] } as React.CSSProperties}>
             <span className={styles.acctWatermark} aria-hidden="true">{a.name}</span>
             {a.live && <span className={styles.acctLive} title="Balance comes live from Nessie">● Live</span>}
+            <p className={styles.acctKind}>{ONE[a.kind]}</p>
             <p className={styles.acctCaption}>{CAPTION[a.kind]}{a.pending ? ` · ${money(a.pending)} pending` : ""}</p>
             <p className={styles.acctBalance}>{money(a.balance)}</p>
             <p className={styles.acctMask}>•••• •••• •••• {a.mask}</p>
