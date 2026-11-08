@@ -222,7 +222,7 @@ function GoalCard({ goal, asOf }: { goal: Prefs["goal"]; asOf: string }) {
       <div className={styles.cardHead}>
         <div>
           <p className={styles.cashLabel}>Your goal</p>
-          <h2 id="goal-title" className={styles.cardTitle}><span aria-hidden="true">{meta?.icon}</span> {goal.label || meta?.label}</h2>
+          <h2 id="goal-title" className={styles.cardTitle}>{goal.label || meta?.label}</h2>
         </div>
         <a className={styles.editLink} href="/onboarding">Edit</a>
       </div>
@@ -387,7 +387,7 @@ function EditBudgets({ data }: { data: DashboardData }) {
           const meta = categoryMeta(k, i);
           return (
             <li key={k}>
-              <span className={styles.catIcon} style={{ background: meta.color }} aria-hidden="true">{meta.icon}</span>
+              <span className={styles.catIcon} style={{ background: meta.color }} aria-hidden="true" />
               <label className={styles.editLabel} htmlFor={`b-${k}`}>{meta.label}</label>
               <input id={`b-${k}`} className={styles.editInput} inputMode="numeric" value={budgets[k] ?? ""} onChange={(e) => setBudgets({ ...budgets, [k]: Number(e.target.value.replace(/\D/g, "")) })} />
             </li>

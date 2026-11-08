@@ -295,11 +295,6 @@
   cursor: not-allowed;
 }
 
-.choiceIcon {
-  font-size: 26px;
-  line-height: 1;
-}
-
 .choiceText {
   display: grid;
   gap: 3px;

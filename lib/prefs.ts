@@ -19,12 +19,12 @@ export type Prefs = {
   completedAt: string;
 };
 
-export const GOAL_OPTIONS: { kind: GoalKind; icon: string; label: string; example: string }[] = [
-  { kind: "trip", icon: "🌴", label: "Take a trip", example: "Trip to Cancún" },
-  { kind: "emergency", icon: "🛟", label: "Build an emergency fund", example: "Emergency fund" },
-  { kind: "card", icon: "💳", label: "Pay off my credit card", example: "Credit card payoff" },
-  { kind: "car", icon: "🚗", label: "Buy or replace a car", example: "Next car" },
-  { kind: "retire", icon: "🌅", label: "Save for retirement", example: "Retirement" },
+export const GOAL_OPTIONS: { kind: GoalKind; label: string; example: string }[] = [
+  { kind: "trip", label: "Take a trip", example: "Trip to Cancún" },
+  { kind: "emergency", label: "Build an emergency fund", example: "Emergency fund" },
+  { kind: "card", label: "Pay off my credit card", example: "Credit card payoff" },
+  { kind: "car", label: "Buy or replace a car", example: "Next car" },
+  { kind: "retire", label: "Save for retirement", example: "Retirement" },
 ];
 
 export const DEMO_PREFS: Prefs = {
