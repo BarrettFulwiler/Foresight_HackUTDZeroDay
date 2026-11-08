@@ -92,7 +92,7 @@ export default async function Landing() {
             <a className={styles.secondary} href="#how">How it works</a>
           </div>
           <p className={styles.micro}>
-            The demo opens straight to the dashboard, using PNC&rsquo;s synthetic customer data and Capital One&rsquo;s Nessie
+            The demo starts with a quick setup where you pick personal or business, then opens the dashboard, using PNC&rsquo;s synthetic customer data and Capital One&rsquo;s Nessie
             sandbox. No real accounts or money.
           </p>
           <ul className={styles.proof}>
@@ -170,7 +170,7 @@ export default async function Landing() {
 
       <section className={`${styles.wrap} ${styles.tryIt}`} aria-labelledby="try-title">
         <h2 id="try-title" className={styles.h2}>See where your money is headed.</h2>
-        <p className={styles.body}>The demo opens on the forecast. Set up your own view afterward if you like.</p>
+        <p className={styles.body}>Pick personal or business, click through the pre-filled setup, and land on the forecast.</p>
         <div className={styles.ctas}>
           <a className={styles.primary} href={DEMO_HREF}>Try the demo</a>
           <a className={styles.secondary} href="/onboarding">Set up your own view</a>
