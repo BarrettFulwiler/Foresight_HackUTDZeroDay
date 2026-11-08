@@ -166,16 +166,11 @@ export default function SavingsChart({ points, topUps, layout = "chart", scope =
         onPointerMove={onMove}
         onPointerLeave={() => setHover(null)}
       >
-        <defs>
-          <linearGradient id="savingsFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#3B5BFD" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#3B5BFD" stopOpacity="0" />
-          </linearGradient>
-        </defs>
         {[0.25, 0.5, 0.75].map((f) => (
           <line key={f} x1={PAD.left} x2={W - PAD.right} y1={PAD.top + f * (H - PAD.top - PAD.bottom)} y2={PAD.top + f * (H - PAD.top - PAD.bottom)} className={styles.gridLine} />
         ))}
-        <path d={chart.area} fill="url(#savingsFill)" />
+        {/* A flat tint, not an SVG gradient: url(#id) fills come out black in the Download Report PNG. */}
+        <path d={chart.area} fill="#1a66ad" fillOpacity={0.1} />
         <path d={chart.line} className={styles.linePath} />
         {pts.map((p, i) =>
           (i % labelEvery === 0 && pts.length - 1 - i >= labelEvery) || i === pts.length - 1 ? (

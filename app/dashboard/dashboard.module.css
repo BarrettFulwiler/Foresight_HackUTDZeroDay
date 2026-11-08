@@ -3173,3 +3173,121 @@
   cursor: pointer;
 }
 .signOut:hover { border-color: #ffffff; background: #ffffff14; }
+
+/* Move: a transfer Nessie hasn't posted after a minute and a half */
+.receiptSlow {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff7ed;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #7c3a0a;
+}
+
+.receiptSlow p {
+  margin: 0 0 6px;
+}
+
+/* ---------- View: Download Report (PNG) ---------- */
+.viewWrap {
+  display: grid;
+  gap: 20px;
+}
+
+/* While the PNG is being made: a little breathing room around the cards. The Gemini boxes and the button are
+   hidden in the real page (not filtered out of the copy) so every card's height is measured without them, and
+   animations are off so nothing is captured mid-slide. */
+.viewExport {
+  padding: 24px;
+  background: var(--bg);
+}
+
+.viewExport [data-report-skip] {
+  display: none !important;
+}
+
+.viewExport *,
+.viewExport *::before,
+.viewExport *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+.reportBar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: -8px;
+}
+
+.reportBtn {
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #ef6a00; /* PNC orange */
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px #0000001f;
+}
+
+.reportBtn:hover {
+  background: #d85f00;
+}
+
+.reportBtn:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.page .reportBtn:focus-visible {
+  outline: 2px solid #ef6a00;
+  outline-offset: 2px;
+}
+
+.reportError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--neg);
+}
+
+.reportHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 14px 20px;
+  border-radius: 14px;
+  background: var(--slate, #4a5560);
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.reportHead strong {
+  font-weight: 750;
+}
+
+.reportBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.reportBrand img {
+  display: block;
+}
+
+.reportFoot {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+

@@ -9,7 +9,7 @@
 //      against the facts (lib/explain.ts unverified()); a reply with an uncalculated number is
 //      retried once, then replaced by a deterministic reply built from the same facts.
 import { NextResponse } from "next/server";
-import { numbersIn, unverified } from "../../../lib/explain";
+import { AUDIENCE_RULES, type Audience, numbersIn, unverified } from "../../../lib/explain";
 import { getCompany } from "../../../lib/companies";
 import { companyDashboardData, todayIso } from "../../../lib/company-dashboard";
 import { getDashboardData } from "../../../lib/finance";
@@ -66,19 +66,21 @@ type RawParse = {
   saveMonthly?: number; payoffCard?: boolean;
 };
 
-async function parseWithGemini(question: string, asOf: string, categories: { name: string; monthly: number }[], accountsLine: string): Promise<WhatIfSpec | null> {
+async function parseWithGemini(question: string, asOf: string, categories: { name: string; monthly: number }[], accountsLine: string, audience: Audience): Promise<WhatIfSpec | null> {
   if (!geminiConfigured()) return null;
   const horizon = horizonMonths(asOf).map((ym) => `${ym} (${longMonth(ym)})`).join(", ");
   const input = [
     `Today in the app's data is ${asOf}. The forecast horizon (YYYY-MM) is: ${horizon}.`,
-    `The user's accounts (balances are real, from both banks): ${accountsLine}.`,
+    audience === "business"
+      ? `The user owns a small business and is asking about the company's money. The company's accounts: ${accountsLine}. "Income" means customer payments; payroll, vendors and supplies are spending.`
+      : `The user's accounts (balances are real, from both banks): ${accountsLine}.`,
     `Spending categories in a typical month: ${categories.map((c) => `${c.name} ${money(c.monthly, false)}`).join(", ") || "none"}.`,
     `Question: ${question}`,
     `Map the question onto the fields. If the user names a month, use that YYYY-MM from the horizon; if they give no month for a one-off expense, leave oneOffMonth empty. If they give no amount for a cut, use 75. Amounts are in dollars, not cents.`,
   ].join("\n");
   try {
     const { data } = await generateJson<RawParse>({
-      system: "You translate a personal-finance what-if question into structured fields for a forecast engine. You do not do any math and you do not give advice; you only extract what the user said, with the assumptions spelled out in 'interpretation'.",
+      system: `You translate a ${audience === "business" ? "small-business" : "personal-finance"} what-if question into structured fields for a forecast engine. You do not do any math and you do not give advice; you only extract what the user said, with the assumptions spelled out in 'interpretation'.${audience === "business" ? " Write 'interpretation' about the company (\"the business\"), not about the owner personally. A hire or raise is a negative monthlyDelta; a new contract or client is a positive one." : ""}`,
       input,
       schema: PARSE_SCHEMA,
       temperature: 0.2,
@@ -104,14 +106,14 @@ async function parseWithGemini(question: string, asOf: string, categories: { nam
 }
 
 /** A reply built only from calculated values, used when Gemini can't write a verified one. */
-function deterministicReply(plan: ReturnType<typeof buildCustomPlan>) {
+function deterministicReply(plan: ReturnType<typeof buildCustomPlan>, checkingName: string) {
   const endA = plan.asIs.months.at(-1)!;
   const endB = plan.withPlan.months.at(-1)!;
   const verdict = plan.withPlan.firstNegative
-    ? `Even with the plan, PNC checking goes negative on ${shortDay(plan.withPlan.firstNegative.date)}`
+    ? `Even with the plan, ${checkingName} goes negative on ${shortDay(plan.withPlan.firstNegative.date)}`
     : plan.asIs.firstNegative
-      ? `As is, PNC checking is overdrawn from ${shortDay(plan.asIs.firstNegative.date)}. With the plan it never goes negative, and its lowest point is ${money(plan.withPlan.lowest.balance)}`
-      : `PNC checking stays positive both ways. With the plan its lowest point is ${money(plan.withPlan.lowest.balance)}`;
+      ? `As is, ${checkingName} is overdrawn from ${shortDay(plan.asIs.firstNegative.date)}. With the plan it never goes negative, and its lowest point is ${money(plan.withPlan.lowest.balance)}`
+      : `${checkingName} stays positive both ways. With the plan its lowest point is ${money(plan.withPlan.lowest.balance)}`;
   return {
     headline: plan.title,
     message: `${verdict}. Cash and savings end the year at ${money(endB.liquid)} with the plan, versus ${money(endA.liquid)} as is. The first step: ${plan.steps[0] ?? "turn on automatic top-ups from savings"} The chart below shows both futures.`,
@@ -128,7 +130,8 @@ export async function POST(req: Request) {
   // A company's what-if runs on that company's own data (body.companyId); otherwise the personal demo customer.
   let data = getDashboardData("C005");
   let live: { accounts: typeof data.accounts; source: "nessie" | "demo" };
-  if (typeof body?.companyId === "string" && body.companyId) {
+  const audience: Audience = typeof body?.companyId === "string" && body.companyId ? "business" : "personal";
+  if (audience === "business") {
     const result = await getCompany(body.companyId);
     if (!("company" in result)) return NextResponse.json({ error: result.error }, { status: 502 });
     data = companyDashboardData(result.company, todayIso()).data;
@@ -144,7 +147,7 @@ export async function POST(req: Request) {
   const categories = [...totals.entries()].map(([name, monthly]) => ({ name, monthly: Math.round(monthly) }));
   const accountsLine = accounts.map((a) => `${a.bank} ${a.name} ${money(a.balance, false)}`).join("; ");
 
-  const fromGemini = await parseWithGemini(question, data.asOf, categories, accountsLine);
+  const fromGemini = await parseWithGemini(question, data.asOf, categories, accountsLine, audience);
   const spec = fromGemini ?? normalizeSpec(fallbackParse(question, data.asOf), data.asOf, categories.map((c) => c.name));
   const parsedBy = fromGemini ? "gemini" : "rules";
 
@@ -157,7 +160,8 @@ export async function POST(req: Request) {
   }
 
   const plan = buildCustomPlan(spec, accounts, data.schedule, data.asOf, cuts);
-  const facts = customFacts(plan, accounts);
+  const facts = customFacts(plan, accounts, audience === "business");
+  const checkingName = audience === "business" ? (accounts.find((a) => a.id === plan.asIs.checkingId)?.name ?? "the operating account") : "PNC checking";
 
   // Gemini writes the reply from the facts; verify every number before it reaches the user.
   let answer: { headline: string; message: string; checked: number; model: string | null; fallback: boolean };
@@ -166,7 +170,7 @@ export async function POST(req: Request) {
     let done: typeof answer | null = null;
     for (let attempt = 0; attempt < 2 && !done; attempt++) {
       const { data: note, model } = await generateJson<{ headline: string; message: string }>({
-        system: NOTE_SYSTEM,
+        system: `${NOTE_SYSTEM}\n\n${AUDIENCE_RULES[audience]}`,
         input: `The user asked: ${question}\n\nFacts:\n${facts.map((f) => `- ${f}`).join("\n")}` + feedback,
         schema: NOTE_SCHEMA,
       });
@@ -177,10 +181,10 @@ export async function POST(req: Request) {
       if (bad.length === 0) done = { headline, message, checked: numbersIn(`${headline}\n${message}`).length, model, fallback: false };
       else feedback = `\n\nYour last draft used numbers that aren't in the facts: ${bad.join(", ")}. Rewrite it using only numbers from the facts.`;
     }
-    answer = done ?? { ...deterministicReply(plan), checked: 0, model: null, fallback: true };
+    answer = done ?? { ...deterministicReply(plan, checkingName), checked: 0, model: null, fallback: true };
   } catch {
     // Any Gemini failure (busy, timeout, unreadable JSON) falls back to the calculated reply instead of a 500.
-    answer ={ ...deterministicReply(plan), checked: 0, model: null, fallback: true };
+    answer ={ ...deterministicReply(plan, checkingName), checked: 0, model: null, fallback: true };
   }
 
   return NextResponse.json({

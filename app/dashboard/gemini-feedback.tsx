@@ -83,7 +83,7 @@ export default function GeminiFeedback({ facts, topic, label, placeholder = "Ask
 
   const typing = reply.status === "done" && shown < text.length;
   return (
-    <div className={styles.gemBox}>
+    <div className={styles.gemBox} data-report-skip="">
       <form className={styles.gemForm} onSubmit={ask}>
         <input
           className={styles.gemInput}

@@ -25,11 +25,13 @@ export async function POST(req: NextRequest) {
   if (fromId === toId) return bad("Choose two different accounts.");
   if (!Number.isFinite(cents) || cents < 1) return bad("Enter an amount greater than $0.");
   if (!companyId) {
-    const allowed = linkedNessieIds();
-    if (!allowed.has(fromId) || !allowed.has(toId)) return bad("Pick two linked accounts.");
   }
 
   try {
+    if (!companyId) {
+      const allowed = await linkedNessieIds();
+      if (!allowed.has(fromId) || !allowed.has(toId)) return bad("Pick two linked accounts.");
+    }
     const from = await getAccount(fromId);
     if (companyId) {
       // Both accounts must belong to this company, and it must be one of the seeded "[Biz]" companies.

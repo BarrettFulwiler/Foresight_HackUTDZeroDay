@@ -35,8 +35,11 @@ export type Receipt = {
   after?: { from: number; to: number };
 };
 
-const POLL_MS = 5000;
-const GIVE_UP_MS = 3 * 60 * 1000;
+// Nessie holds the money at once but only posts it when its sandbox sweeps (about once a minute, sometimes much
+// longer). Check often while a transfer is fresh, then back off; a "slow" one is still checked until it posts.
+const POLL_FAST_MS = 2000;
+const POLL_SLOW_MS = 15000;
+const FAST_FOR_MS = 90 * 1000;
 const BUDGETS_KEY = "foresight.budgets";
 
 // company: set on /dashboard/company. The same dashboard then runs on that company's Nessie data (lib/company-dashboard.ts).
@@ -105,32 +108,93 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
     return requestId;
   }
 
-  // Poll pending transfers until Nessie's once-a-minute sweep completes them, then refresh balances.
+  // A transfer reached a final state (completed, declined, cancelled): refresh balances and close its receipt.
+  const settle = useCallback(async (r: Receipt, t: { status: Receipt["status"]; decisionReason: string }) => {
+    const fresh = await refreshAccounts();
+    setReceipts((list) =>
+      list.map((x) =>
+        x.requestId === r.requestId
+          ? { ...x, status: t.status, error: t.status === "completed" || t.status === "cancelled" ? undefined : t.decisionReason || undefined, after: { from: balanceOf(fresh, r.fromId), to: balanceOf(fresh, r.toId) } }
+          : x,
+      ),
+    );
+  }, [refreshAccounts]);
+
+  // Poll open transfers until Nessie posts them, then refresh balances.
   const receiptsRef = useRef(receipts);
   receiptsRef.current = receipts;
+  const open = receipts.filter((r) => (r.status === "pending" || r.status === "slow") && r.id);
+  const anyFresh = open.some((r) => Date.now() - r.createdAt < FAST_FOR_MS);
   useEffect(() => {
-    if (!receipts.some((r) => r.status === "pending")) return;
+    if (open.length === 0) return;
     const timer = setInterval(async () => {
-      for (const r of receiptsRef.current.filter((x) => x.status === "pending" && x.id)) {
-        if (Date.now() - r.createdAt > GIVE_UP_MS) {
+      for (const r of receiptsRef.current.filter((x) => (x.status === "pending" || x.status === "slow") && x.id)) {
+        if (r.status === "pending" && Date.now() - r.createdAt > FAST_FOR_MS) {
           setReceipts((list) => list.map((x) => (x.requestId === r.requestId ? { ...x, status: "slow" } : x)));
-          continue;
         }
         const res = await fetch(`/api/nessie/transactions/${r.id}`, { cache: "no-store" }).catch(() => null);
         const t = res && res.ok ? ((await res.json()) as { status: Receipt["status"]; decisionReason: string }) : null;
-        if (!t || t.status === "pending") continue;
-        const fresh = await refreshAccounts();
-        setReceipts((list) =>
-          list.map((x) =>
-            x.requestId === r.requestId
-              ? { ...x, status: t.status, error: t.status === "completed" ? undefined : t.decisionReason || undefined, after: { from: balanceOf(fresh, r.fromId), to: balanceOf(fresh, r.toId) } }
-              : x,
-          ),
-        );
+        if (t && t.status !== "pending") await settle(r, t);
       }
-    }, POLL_MS);
+    }, anyFresh ? POLL_FAST_MS : POLL_SLOW_MS);
     return () => clearInterval(timer);
-  }, [receipts, refreshAccounts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open.length, anyFresh, settle]);
+
+  // Download Report: a PNG of the View tab as it looks now, without the Ask Gemini boxes or the button itself.
+  const viewRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  async function downloadReport() {
+    if (exporting || !viewRef.current) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      const { toPng } = await import("html-to-image");
+      // Let the export layout settle first: report header shown, Gemini boxes and the button hidden (CSS), no animations.
+      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+      const node = viewRef.current;
+      // The image copy loses CSS-class paint on SVG shapes (lines and areas come out black), so write each shape's
+      // computed paint inline for the capture, then put the original style attributes back.
+      const PAINT = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-opacity", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "opacity", "font-size", "font-weight", "font-family", "letter-spacing"];
+      const saved: [Element, string | null][] = [];
+      node.querySelectorAll("svg *").forEach((el) => {
+        const cs = getComputedStyle(el);
+        saved.push([el, el.getAttribute("style")]);
+        el.setAttribute("style", `${el.getAttribute("style") ?? ""};${PAINT.map((p) => `${p}:${cs.getPropertyValue(p)}`).join(";")}`);
+      });
+      let url: string;
+      try {
+        url = await toPng(node, {
+          pixelRatio: 2,
+          backgroundColor: getComputedStyle(node.closest("main") ?? document.body).getPropertyValue("--bg").trim() || "#eef1f4",
+        });
+      } finally {
+        for (const [el, style] of saved) {
+          if (style === null) el.removeAttribute("style");
+          else el.setAttribute("style", style);
+        }
+      }
+      const a = document.createElement("a");
+      const slug = (company?.name ?? "personal").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      a.href = url;
+      a.download = `foresight-report-${slug}-${new Date().toISOString().slice(0, 10)}.png`;
+      a.click();
+    } catch {
+      setExportError("The report couldn't be made. Try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function cancelTransfer(requestId: string) {
+    const r = receiptsRef.current.find((x) => x.requestId === requestId);
+    if (!r?.id) return;
+    const res = await fetch(`/api/nessie/transactions/${r.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cancel" }) }).catch(() => null);
+    const t = res ? await res.json().catch(() => null) : null;
+    if (res?.ok && t?.status && t.status !== "pending") await settle(r, t);
+    else setReceipts((list) => list.map((x) => (x.requestId === requestId ? { ...x, error: t?.error || "Couldn't cancel it. Try again." } : x)));
+  }
 
   // Coming straight from onboarding (?welcome=1): show future-you's first message once.
   useEffect(() => {
@@ -185,7 +249,23 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} className={styles.body}>
         {tab === "View" && (
           <>
-            {welcome && prefs && !company && <Welcome prefs={prefs} onClose={() => setWelcome(false)} />}
+          <div className={styles.reportBar}>
+            {exportError && <p className={styles.reportError} role="alert">{exportError}</p>}
+            <button type="button" className={styles.reportBtn} onClick={downloadReport} disabled={exporting}>
+              {exporting ? "Making report…" : "Download Report"}
+            </button>
+          </div>
+          <div ref={viewRef} className={exporting ? `${styles.viewWrap} ${styles.viewExport}` : styles.viewWrap}>
+            {exporting && (
+              <div className={styles.reportHead}>
+                <span className={styles.reportBrand}><img src="/brand/foresight-eye.png" alt="" width={43} height={24} />{BRAND}</span>
+                <span>
+                  <strong>{company ? company.name : prefs?.name ? `${prefs.name}'s money` : "Your money"}</strong>
+                  {" · "}Report from {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · data as of {data.asOf}
+                </span>
+              </div>
+            )}
+            {welcome && prefs && !company && <div data-report-skip=""><Welcome prefs={prefs} onClose={() => setWelcome(false)} /></div>}
             {company && (
               <p className={styles.companyStrip}>
                 {company.industry} · {company.city} · one of {company.pool} companies in Nessie
@@ -212,9 +292,11 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
             {shown("budget") && <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} layout={display.budget} />}
             {shown("accounts") && <MoneySummary accounts={accounts} source={source} layout={display.accounts} business={Boolean(company)} />}
             {shown("credit") && data.credit && <CreditScore accounts={accounts} credit={data.credit} asOf={data.asOf} layout={display.credit} />}
+            {exporting && <p className={styles.reportFoot}>Made with {BRAND} · Synthetic data only · Educational prototype · Not financial advice.</p>}
+          </div>
           </>
         )}
-        {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} />}
+        {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} onCancel={cancelTransfer} />}
         {tab === "Edit" && (
           <>
             <EditVisibility cards={viewCards} hidden={hidden} onToggle={toggleHidden} onShowAll={showAll} onOpen={setTab} />
@@ -452,12 +534,13 @@ function Budget({ income, spending, loans, month, layout }: { income: number; sp
   );
 }
 
-function Move({ accounts, source, sourceError, receipts, onTransfer }: {
+function Move({ accounts, source, sourceError, receipts, onTransfer, onCancel }: {
   accounts: Account[];
   source: Source;
   sourceError?: string;
   receipts: Receipt[];
   onTransfer: (fromId: string, toId: string, amount: number) => Promise<unknown>;
+  onCancel: (requestId: string) => Promise<void>;
 }) {
   const linked = accounts.filter((a) => a.nessieId);
   const sources = linked.filter((a) => a.kind === "cash");
@@ -517,7 +600,7 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
           <button type="button" className={styles.primaryBtn} disabled={Boolean(problem) || busy} onClick={submit}>
             {busy ? "Sending…" : `Transfer ${value > 0 ? money(value) : ""}`}
           </button>
-          <p className={styles.note}>{problem || "Transfers show as pending first. Nessie usually completes them within a minute."}</p>
+          <p className={styles.note}>{problem || "The money is held the moment you send it. Nessie's sandbox posts it on its next sweep, usually within a minute."}</p>
         </div>
       </section>
 
@@ -533,7 +616,7 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
                 <div className={styles.receiptTop}>
                   <strong>{money(r.amount)}</strong>
                   <span className={`${styles.status} ${styles[`st_${r.status}`] ?? ""}`}>
-                    {r.status === "sending" ? "Sending" : r.status === "pending" ? "Pending" : r.status === "slow" ? "Still pending" : r.status === "failed" ? "Failed" : r.status[0].toUpperCase() + r.status.slice(1)}
+                    {r.status === "sending" ? "Sending" : r.status === "pending" ? "On hold, posting" : r.status === "slow" ? "Waiting on Nessie" : r.status === "failed" ? "Failed" : r.status[0].toUpperCase() + r.status.slice(1)}
                   </span>
                 </div>
                 <p className={styles.receiptRoute}>{nameOf(r.fromId)} → {nameOf(r.toId)}</p>
@@ -541,10 +624,16 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
                 <dl className={styles.receiptMeta}>
                   {r.id && <div><dt>Transaction</dt><dd><code>{r.id}</code></dd></div>}
                   <div><dt>Sent</dt><dd>{new Date(r.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</dd></div>
-                  <div><dt>From</dt><dd>{money(r.before.from)}{r.after ? ` → ${money(r.after.from)}` : ""}</dd></div>
-                  <div><dt>To</dt><dd>{money(r.before.to)}{r.after ? ` → ${money(r.after.to)}` : ""}</dd></div>
+                  <div><dt>From</dt><dd>{money(r.before.from)} → {money(r.after?.from ?? r.before.from - r.amount)}{r.after ? "" : " once posted"}</dd></div>
+                  <div><dt>To</dt><dd>{money(r.before.to)} → {money(r.after?.to ?? r.before.to + r.amount)}{r.after ? "" : " once posted"}</dd></div>
                 </dl>
                 {r.status === "pending" && <div className={styles.pendingBar} aria-hidden="true"><span /></div>}
+                {r.status === "slow" && (
+                  <div className={styles.receiptSlow}>
+                    <p>Nessie&rsquo;s sandbox hasn&rsquo;t posted this yet. The {money(r.amount)} stays on hold in {nameOf(r.fromId)} and posts as soon as Nessie catches up. Foresight keeps checking.</p>
+                    <button type="button" className={styles.linkBtn} onClick={() => onCancel(r.requestId)}>Cancel transfer</button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

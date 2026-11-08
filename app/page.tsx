@@ -74,7 +74,7 @@ export default async function Landing() {
         </a>
         <nav className={styles.navLinks} aria-label="Main">
           <a href="#how">How it works</a>
-          <a href="/dashboard">Dashboard</a>
+          <a href="/start?mode=signin">Sign in</a>
           <a className={styles.navCta} href={DEMO_HREF}>Try the demo</a>
         </nav>
       </header>
