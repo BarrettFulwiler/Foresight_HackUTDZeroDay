@@ -141,7 +141,7 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open.length, anyFresh, settle]);
 
-  // Download Report: a PNG of the View tab as it looks now, without the Ask Gemini boxes or the button itself.
+  // Download Report: a PDF of the View tab as it looks now, without the Ask Gemini boxes or the button itself.
   const viewRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -150,7 +150,8 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
     setExporting(true);
     setExportError("");
     try {
-      const { toPng } = await import("html-to-image");
+      const { toJpeg } = await import("html-to-image");
+      const { jpegFromDataUrl, jpegToPdf } = await import("../../lib/pdf");
       // Let the export layout settle first: report header shown, Gemini boxes and the button hidden (CSS), no animations.
       await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
       const node = viewRef.current;
@@ -165,7 +166,8 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
       });
       let url: string;
       try {
-        url = await toPng(node, {
+        url = await toJpeg(node, {
+          quality: 0.92,
           pixelRatio: 2,
           backgroundColor: getComputedStyle(node.closest("main") ?? document.body).getPropertyValue("--bg").trim() || "#eef1f4",
         });
@@ -175,11 +177,14 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
           else el.setAttribute("style", style);
         }
       }
+      const { bytes, width, height } = await jpegFromDataUrl(url);
+      const pdf = URL.createObjectURL(jpegToPdf(bytes, width, height));
       const a = document.createElement("a");
       const slug = (company?.name ?? "personal").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      a.href = url;
-      a.download = `foresight-report-${slug}-${new Date().toISOString().slice(0, 10)}.png`;
+      a.href = pdf;
+      a.download = `foresight-report-${slug}-${new Date().toISOString().slice(0, 10)}.pdf`;
       a.click();
+      setTimeout(() => URL.revokeObjectURL(pdf), 10_000);
     } catch {
       setExportError("The report couldn't be made. Try again.");
     } finally {
