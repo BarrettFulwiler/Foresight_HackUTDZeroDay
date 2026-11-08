@@ -210,38 +210,89 @@ function Compare({ asIs, withPlan, cardIds }: { asIs: Forecast; withPlan: Foreca
 }
 
 const W = 640;
-const H = 230;
-const PAD = { top: 14, right: 10, bottom: 26, left: 10 };
+const H = 250;
+const PAD = { top: 12, right: 14, bottom: 28, left: 50 };
+
+/** A round step that splits `range` into about 5 bands (500, 1k, 2.5k, 5k…). */
+function niceStep(range: number) {
+  const raw = Math.max(range, 1) / 5;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const n = raw / mag;
+  return (n <= 1.5 ? 1 : n <= 2.25 ? 2 : n <= 3.5 ? 2.5 : n <= 7 ? 5 : 10) * mag;
+}
+const tickLabel = (v: number) => {
+  const abs = Math.abs(v);
+  return `${v < 0 ? "-" : ""}$${abs >= 1000 ? `${+(abs / 1000).toFixed(1)}k` : abs}`;
+};
 
 function PlanChart({ asIs, withPlan }: { asIs: Forecast; withPlan: Forecast }) {
   const a = asIs.checkingDaily;
   const b = withPlan.checkingDaily;
-  const vals = [...a, ...b].map((p) => p.balance);
-  const min = Math.min(0, ...vals);
-  const max = Math.max(FLOOR, ...vals);
-  const pad = (max - min) * 0.08;
-  const lo = min - pad;
-  const hi = max + pad;
-  const x = (i: number) => PAD.left + (i / Math.max(1, a.length - 1)) * (W - PAD.left - PAD.right);
-  const y = (v: number) => PAD.top + (1 - (v - lo) / (hi - lo)) * (H - PAD.top - PAD.bottom);
-  const path = (pts: typeof a) =>
-    pts
-      .map((p, i) => ({ p, i }))
-      .filter(({ i }) => i % 2 === 0 || i === pts.length - 1)
-      .map(({ p, i }, k) => `${k ? "L" : "M"}${x(i).toFixed(1)},${y(p.balance).toFixed(1)}`)
+  const max = Math.max(FLOOR, ...a.map((p) => p.balance), ...b.map((p) => p.balance));
+  const min = Math.min(0, ...a.map((p) => p.balance), ...b.map((p) => p.balance));
+  // If "as is" plunges far below zero, show only as much below $0 as above it, so the plan line keeps its detail.
+  // A note on the chart says how low "as is" goes. The plan line itself is never cut off.
+  const planMin = Math.min(0, ...b.map((p) => p.balance));
+  const limit = Math.min(-Math.max(max, 1000), planMin * 1.1);
+  const clipped = min < limit;
+  const step = niceStep(max - (clipped ? limit : min));
+  const hi = Math.ceil((max * 1.02) / step) * step;
+  const lo = Math.floor((clipped ? limit : min * 1.02) / step) * step;
+  const ticks: number[] = [];
+  for (let v = lo; v <= hi + 1e-6; v += step) ticks.push(Math.round(v));
+
+  const plotRight = W - PAD.right;
+  const plotBottom = H - PAD.bottom;
+  const x = (i: number) => PAD.left + (i / Math.max(1, a.length - 1)) * (plotRight - PAD.left);
+  const y = (v: number) => PAD.top + (1 - (v - lo) / (hi - lo)) * (plotBottom - PAD.top);
+  const path = (pts: typeof a, end?: { i: number; v: number }) =>
+    [
+      ...pts.map((p, i) => ({ i, v: p.balance })).filter(({ i }) => i % 2 === 0 || i === pts.length - 1),
+      ...(end ? [end] : []),
+    ]
+      .map(({ i, v }, k) => `${k ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
       .join(" ");
+  // When the scale is cut off, "as is" stops where it first leaves the bottom (with an arrow there),
+  // so later paycheck spikes don't poke back in as stray fragments.
+  const cut = clipped ? a.findIndex((p) => p.balance < lo) : -1;
+  const exit = cut > 0 ? { i: cut - 1 + (a[cut - 1].balance - lo) / (a[cut - 1].balance - a[cut].balance), v: lo } : undefined;
+  const asIsPath = exit ? path(a.slice(0, cut), exit) : path(a);
   const months = a.map((p, i) => ({ i, p })).filter(({ p }) => p.date.endsWith("-01"));
+  const anchor = (px: number) => (px - PAD.left < 24 ? "start" : plotRight - px < 24 ? "end" : "middle");
   const zero = y(0);
   return (
     <figure className={styles.planChartWrap}>
-      <svg viewBox={`0 0 ${W} ${H}`} className={styles.lineChart} role="img" aria-label={`PNC checking over the next 12 months. As is: ${asIs.firstNegative ? `overdrawn from ${shortDay(asIs.firstNegative.date)}` : "stays positive"}. With the plan: ${withPlan.firstNegative ? `overdrawn from ${shortDay(withPlan.firstNegative.date)}` : "stays positive"}.`}>
-        <rect x={PAD.left} y={zero} width={W - PAD.left - PAD.right} height={Math.max(0, H - PAD.bottom - zero)} className={styles.overdraftZone} />
-        <line x1={PAD.left} x2={W - PAD.right} y1={zero} y2={zero} className={styles.zeroLine} />
-        <text x={W - PAD.right} y={zero - 5} textAnchor="end" className={styles.axisLabel}>$0</text>
-        <path d={path(a)} className={styles.lineAsIs} />
-        <path d={path(b)} className={styles.linePlan} />
+      <svg viewBox={`0 0 ${W} ${H}`} className={styles.lineChart} role="img" aria-label={`PNC checking over the next 12 months. As is: ${asIs.firstNegative ? `overdrawn from ${shortDay(asIs.firstNegative.date)}, falling to ${money(asIs.lowest.balance, false)}` : "stays positive"}. With the plan: ${withPlan.firstNegative ? `overdrawn from ${shortDay(withPlan.firstNegative.date)}` : `stays positive, lowest ${money(withPlan.lowest.balance, false)}`}.`}>
+        <defs>
+          <clipPath id="plan-plot">
+            <rect x={PAD.left} y={PAD.top - 4} width={plotRight - PAD.left} height={plotBottom - PAD.top + 4} />
+          </clipPath>
+        </defs>
+        <rect x={PAD.left} y={zero} width={plotRight - PAD.left} height={Math.max(0, plotBottom - zero)} className={styles.overdraftZone} />
+        {ticks.map((t) => (
+          <g key={t}>
+            {t !== 0 && <line x1={PAD.left} x2={plotRight} y1={y(t)} y2={y(t)} className={styles.gridLine} />}
+            <text x={PAD.left - 8} y={y(t) + 4} textAnchor="end" className={t === 0 ? styles.axisZero : styles.axisLabel}>{tickLabel(t)}</text>
+          </g>
+        ))}
+        <line x1={PAD.left} x2={plotRight} y1={zero} y2={zero} className={styles.zeroLine} />
+        <g clipPath="url(#plan-plot)">
+          <path d={asIsPath} className={styles.lineAsIs} />
+          <path d={path(b)} className={styles.linePlan} />
+        </g>
+        {exit && (
+          <path
+            d={`M${(x(exit.i) - 6).toFixed(1)},${plotBottom - 9} L${(x(exit.i) + 6).toFixed(1)},${plotBottom - 9} L${x(exit.i).toFixed(1)},${plotBottom} Z`}
+            className={styles.clipArrow}
+          />
+        )}
+        {clipped && (
+          <text x={plotRight - 6} y={(zero + plotBottom) / 2 + 4} textAnchor="end" className={styles.clipNote}>
+            ↓ As is keeps falling, to {money(asIs.lowest.balance, false)} by {shortDay(asIs.lowest.date)}
+          </text>
+        )}
         {months.filter((_, k) => k % 2 === 0).map(({ i, p }) => (
-          <text key={p.date} x={x(i)} y={H - 7} textAnchor="middle" className={styles.axisLabel}>{shortMonth(p.date.slice(0, 7))}</text>
+          <text key={p.date} x={x(i)} y={H - 8} textAnchor={anchor(x(i))} className={styles.axisLabel}>{shortMonth(p.date.slice(0, 7))}</text>
         ))}
       </svg>
       <figcaption className={styles.legendRow}>

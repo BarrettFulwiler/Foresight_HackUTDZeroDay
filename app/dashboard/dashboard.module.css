@@ -1448,6 +1448,26 @@
   stroke-dasharray: 4 4;
 }
 
+.axisZero {
+  font-size: 12px;
+  font-weight: 700;
+  fill: #dc2626;
+}
+
+.clipArrow {
+  fill: #dc2626;
+}
+
+.clipNote {
+  font-size: 12px;
+  font-weight: 700;
+  fill: #b91c1c;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
 .lineAsIs,
 .linePlan {
   fill: none;
