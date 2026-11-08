@@ -1,8 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Account, DashboardData } from "../../lib/finance";
+import type { Account, DashboardData, ScheduleEvent } from "../../lib/finance";
 import { BRAND } from "../../lib/brand";
+import { categoryTotals, monthlyTotals, runForecast, type Forecast } from "../../lib/forecast";
 import { categoryMeta, longMonth, money } from "../../lib/format";
+import { shortDay } from "../../lib/plans";
 import { GOAL_OPTIONS, type Prefs, monthsUntil, usePrefs } from "../../lib/prefs";
 import { type Summary, summarize } from "../../lib/summary";
 import SpendingDonut from "./spending-donut";
@@ -31,6 +33,7 @@ export type Receipt = {
 
 const POLL_MS = 5000;
 const GIVE_UP_MS = 3 * 60 * 1000;
+const BUDGETS_KEY = "foresight.budgets";
 
 export default function Dashboard({ data, source: initialSource, sourceError }: { data: DashboardData; source: Source; sourceError?: string }) {
   const [tab, setTab] = useState<Tab>("View");
@@ -43,6 +46,24 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
   const [source, setSource] = useState<Source>(initialSource);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const sum = useMemo(() => summarize({ ...data, accounts }), [data, accounts]);
+
+  // Budgets from the Edit tab (only the categories the user changed), saved on this device.
+  // They become category cuts for the forecast, so View's health cards and every Advising plan use them.
+  const typical = useMemo(() => categoryTotals(data.schedule), [data.schedule]);
+  const [budgets, setBudgets] = useState<Record<string, number>>({});
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(BUDGETS_KEY) ?? "{}");
+      if (saved && typeof saved === "object") setBudgets(Object.fromEntries(Object.entries(saved).filter(([k, v]) => k in typical && typeof v === "number" && v >= 0)) as Record<string, number>);
+    } catch {}
+  }, [typical]);
+  const updateBudgets = (next: Record<string, number>) => {
+    setBudgets(next);
+    try {
+      localStorage.setItem(BUDGETS_KEY, JSON.stringify(next));
+    } catch {}
+  };
+  const cuts = useMemo(() => Object.fromEntries(Object.entries(budgets).filter(([k]) => k in typical).map(([k, v]) => [k, typical[k] - v])), [budgets, typical]);
 
   const refreshAccounts = useCallback(async () => {
     const res = await fetch("/api/nessie/accounts", { cache: "no-store" });
@@ -139,13 +160,15 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
               <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={prefs?.period ?? 3} /></section>
               <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} /></section>
             </div>
-            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={prefs?.units ?? "dollars"} />
+            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={prefs?.units ?? "dollars"} cuts={cuts} />
             <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} />
             <MoneySummary accounts={accounts} source={source} />
           </>
         )}
         {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} />}
-        {tab === "Edit" && <EditBudgets data={data} />}
+        {tab === "Edit" && (
+          <EditBudgets typical={typical} budgets={budgets} onChange={updateBudgets} cuts={cuts} accounts={accounts} schedule={data.schedule} asOf={data.asOf} onOpen={setTab} />
+        )}
         {tab === "Advising" && (
           <Advising
             accounts={accounts}
@@ -156,6 +179,7 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
             receipts={receipts}
             onTransfer={sendTransfer}
             onShowReceipts={() => setTab("Move")}
+            cuts={cuts}
           />
         )}
       </div>
@@ -366,38 +390,66 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
   );
 }
 
-function EditBudgets({ data }: { data: DashboardData }) {
-  const recent = data.months.slice(-3);
-  const avgIncome = recent.reduce((s, m) => s + m.income, 0) / recent.length;
-  const avgLoans = recent.reduce((s, m) => s + m.loanPayments, 0) / recent.length;
-  const defaults = useMemo(() => {
-    const t: Record<string, number> = {};
-    for (const m of recent) for (const [k, v] of Object.entries(m.byCategory)) t[k] = (t[k] ?? 0) + v / recent.length;
-    return Object.fromEntries(Object.entries(t).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, Math.round(v / 10) * 10]));
-  }, [recent]);
-  const [budgets, setBudgets] = useState<Record<string, number>>(defaults);
-  const planned = Object.values(budgets).reduce((s, v) => s + (v || 0), 0);
-  const left = avgIncome - planned - avgLoans;
+// The Edit tab: monthly budgets per category, starting from the forecast's typical month.
+// Changes feed the same forecast as View and Advising, so all three always agree.
+function EditBudgets({ typical, budgets, onChange, cuts, accounts, schedule, asOf, onOpen }: {
+  typical: Record<string, number>;
+  budgets: Record<string, number>;
+  onChange: (next: Record<string, number>) => void;
+  cuts: Record<string, number>;
+  accounts: Account[];
+  schedule: ScheduleEvent[];
+  asOf: string;
+  onOpen: (tab: Tab) => void;
+}) {
+  const cats = Object.keys(typical).sort((a, b) => typical[b] - typical[a]);
+  const edited = Object.keys(budgets).length > 0;
+  const m = useMemo(() => monthlyTotals(accounts, schedule, cuts), [accounts, schedule, cuts]);
+  const now = useMemo(() => runForecast(accounts, schedule, asOf), [accounts, schedule, asOf]);
+  const withBudgets = useMemo(() => (edited ? runForecast(accounts, schedule, asOf, { cuts }) : now), [accounts, schedule, asOf, cuts, edited, now]);
+  const checking = (f: Forecast) => (f.firstNegative ? `overdrawn on ${shortDay(f.firstNegative.date)}` : `never overdrawn (lowest ${money(f.lowest.balance, false)})`);
+  const set = (k: string, raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    const next = { ...budgets };
+    if (digits !== "" && Number(digits) === Math.round(typical[k])) delete next[k];
+    else next[k] = Number(digits || 0);
+    onChange(next);
+  };
   return (
     <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="edit-title">
       <h2 id="edit-title" className={styles.cardTitle}>Edit monthly budget</h2>
-      <p className={styles.cardSub}>Starts from your last 3 months. Changes stay on this device for now.</p>
+      <p className={styles.cardSub}>
+        Starts from your typical month (the average of your last 3). Changes update the forecast everywhere: the health cards on View and every plan on Advising. Saved on this device.
+      </p>
       <ul className={styles.editList}>
-        {Object.keys(budgets).map((k, i) => {
+        {cats.map((k, i) => {
           const meta = categoryMeta(k, i);
+          const changed = k in budgets;
           return (
             <li key={k}>
               <span className={styles.catIcon} style={{ background: meta.color }} aria-hidden="true" />
-              <label className={styles.editLabel} htmlFor={`b-${k}`}>{meta.label}</label>
-              <input id={`b-${k}`} className={styles.editInput} inputMode="numeric" value={budgets[k] ?? ""} onChange={(e) => setBudgets({ ...budgets, [k]: Number(e.target.value.replace(/\D/g, "")) })} />
+              <label className={styles.editLabel} htmlFor={`b-${k}`}>
+                {meta.label}
+                {changed && <small className={styles.editWas}>Typical {money(typical[k], false)}</small>}
+              </label>
+              <input id={`b-${k}`} className={changed ? `${styles.editInput} ${styles.editChanged}` : styles.editInput} inputMode="numeric" value={budgets[k] ?? Math.round(typical[k])} onChange={(e) => set(k, e.target.value)} />
             </li>
           );
         })}
       </ul>
-      <div className={`${styles.budgetBox} ${left < 0 ? styles.budgetBad : styles.budgetGood}`}>
-        <span>Planned leftover each month</span>
-        <strong>{left < 0 ? "-" : ""}{money(Math.abs(left))}</strong>
-        <small>Income {money(avgIncome, false)} − budgets {money(planned, false)} − loan payments {money(avgLoans, false)}</small>
+      <div className={`${styles.budgetBox} ${m.shortfall < 0 ? styles.budgetBad : styles.budgetGood}`} aria-live="polite">
+        <span>Monthly {m.shortfall < 0 ? "shortfall" : "surplus"}{edited ? " with these budgets" : ""}</span>
+        <strong>{m.shortfall < 0 ? "−" : "+"}{money(Math.abs(m.shortfall), false)}</strong>
+        <small>
+          Income {money(m.income, false)} − spending {money(m.spending, false)} − loans {money(m.loanPayments, false)} − card interest {money(m.cardInterest, false)}. Same math as the shortfall card on View.
+        </small>
+      </div>
+      <p className={styles.editEffect} aria-live="polite">
+        PNC checking: {edited ? <>{checking(now)} as things are, <strong>{checking(withBudgets)}</strong> with these budgets.</> : <>{checking(now)} at this pace.</>}
+      </p>
+      <div className={styles.editActions}>
+        <button type="button" className={styles.linkBtn} onClick={() => onOpen("Advising")}>See it on Advising →</button>
+        {edited && <button type="button" className={styles.linkBtn} onClick={() => onChange({})}>Reset to your typical month</button>}
       </div>
     </section>
   );

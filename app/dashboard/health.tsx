@@ -2,7 +2,7 @@
 import { useMemo } from "react";
 import type { Account, ScheduleEvent } from "../../lib/finance";
 import { money } from "../../lib/format";
-import { runForecast } from "../../lib/forecast";
+import { payoffEffect, runForecast } from "../../lib/forecast";
 import styles from "./dashboard.module.css";
 
 type Status = "bad" | "warn" | "good";
@@ -12,9 +12,12 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.p
 
 // Three health indicators, all computed by the forecast engine from live balances.
 // They update when balances change (e.g. after a transfer on the Move tab).
-export default function Health({ accounts, schedule, asOf, units }: { accounts: Account[]; schedule: ScheduleEvent[]; asOf: string; units: "dollars" | "days" }) {
+// `cuts` are the budget changes from the Edit tab, so these cards reflect them.
+const NO_CUTS: Record<string, number> = {};
+export default function Health({ accounts, schedule, asOf, units, cuts = NO_CUTS }: { accounts: Account[]; schedule: ScheduleEvent[]; asOf: string; units: "dollars" | "days"; cuts?: Record<string, number> }) {
+  const budgeted = Object.keys(cuts).length > 0;
   const h = useMemo(() => {
-    const base = runForecast(accounts, schedule, asOf);
+    const base = runForecast(accounts, schedule, asOf, { cuts });
     // Lowest point in the next 60 days, or before the first overdraft if that comes sooner.
     const negAt = base.firstNegative ? base.checkingDaily.indexOf(base.firstNegative) : -1;
     const soon = base.checkingDaily.slice(0, negAt > 0 ? Math.min(negAt, 60) : 60);
@@ -23,15 +26,13 @@ export default function Health({ accounts, schedule, asOf, units }: { accounts: 
     // What paying off the costliest card from the biggest savings account would save.
     const card = accounts.filter((a) => a.kind === "credit" && a.balance > 0).sort((a, b) => b.balance * b.apr - a.balance * a.apr)[0];
     const source = accounts.filter((a) => a.kind === "cash" && a.type === "savings").sort((a, b) => b.balance - a.balance)[0];
-    let payoff: { card: Account; source: Account; perMonth: number } | null = null;
+    let payoff: (ReturnType<typeof payoffEffect> & { card: Account; source: Account }) | null = null;
     if (card && source && source.balance >= card.balance) {
-      const next = new Date(Date.parse(asOf) + 2 * 86400000).toISOString().slice(0, 10);
-      const alt = runForecast(accounts, schedule, asOf, { moves: [{ date: next, fromId: source.id, toId: card.id, amount: card.balance, label: "Pay off card" }] });
-      const gain = (alt.months.at(-1)!.netWorth - base.months.at(-1)!.netWorth) / 12;
-      if (gain > 1) payoff = { card, source, perMonth: gain };
+      const effect = payoffEffect(accounts, schedule, asOf, card.id, source.id, cuts);
+      if (effect.perMonth >= 1) payoff = { ...effect, card, source };
     }
     return { base, lowSoon, payoff };
-  }, [accounts, schedule, asOf]);
+  }, [accounts, schedule, asOf, cuts]);
 
   const { base, lowSoon, payoff } = h;
   const m = base.monthly;
@@ -60,7 +61,7 @@ export default function Health({ accounts, schedule, asOf, units }: { accounts: 
         <p className={styles.healthLabel}><Dot s={s2} /> Monthly {m.shortfall < 0 ? "shortfall" : "surplus"}</p>
         <p className={styles.healthValue}>{m.shortfall < 0 ? "−" : "+"}{money(Math.abs(m.shortfall), false)}<small> / month</small></p>
         <p className={styles.healthSub}>
-          Income {money(m.income, false)} vs. spending {money(m.spending, false)}, loans {money(m.loanPayments, false)} and card interest {money(m.cardInterest, false)}.
+          A typical month{budgeted ? " with your budgets from Edit" : ", averaged over your last 3"}: income {money(m.income, false)} vs. spending {money(m.spending, false)}, loans {money(m.loanPayments, false)} and card interest {money(m.cardInterest, false)}.
         </p>
         <p className={styles.healthFoot}>
           {lasts === null
@@ -77,7 +78,7 @@ export default function Health({ accounts, schedule, asOf, units }: { accounts: 
         <p className={styles.healthSub}>You pay {money(m.cardInterest, false)} a month in card interest and earn {money(m.savingsInterest, false)} on savings.</p>
         <p className={styles.healthFoot}>
           {payoff
-            ? `Paying off your ${payoff.card.bank} card from ${payoff.source.bank} savings would leave you about ${money(payoff.perMonth, false)} a month better off.`
+            ? `Paying off your ${payoff.card.bank} card from ${payoff.source.bank} savings: ${money(payoff.cardSaved, false)} less card interest − ${money(payoff.savingsLost, false)} less savings interest = about ${money(payoff.perMonth, false)} a month better off.`
             : "No card balance is costing you more than your savings earn."}
         </p>
       </article>

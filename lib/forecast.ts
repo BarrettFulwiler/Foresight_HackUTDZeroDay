@@ -38,6 +38,7 @@ export type Forecast = {
   monthly: Monthly;
   liquidNow: number;
   cashLastsMonths: number | null; // how long cash + savings cover the shortfall (null = not shrinking)
+  interest: { cards: number; savings: number }; // total card interest charged and savings interest earned over the forecast
 };
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -83,7 +84,8 @@ export function monthlyTotals(accounts: Account[], schedule: ScheduleEvent[], cu
   };
 }
 
-function categoryTotals(schedule: ScheduleEvent[]) {
+/** Typical monthly spending per category (the starting budget on the Edit tab). */
+export function categoryTotals(schedule: ScheduleEvent[]) {
   const t: Record<string, number> = {};
   for (const e of schedule) if (e.flow === "expense") t[e.category] = (t[e.category] ?? 0) + Math.abs(e.delta);
   return t;
@@ -143,6 +145,7 @@ export function runForecast(accounts: Account[], schedule: ScheduleEvent[], asOf
   const checkingDaily: DayPoint[] = [];
   const monthPoints: MonthPoint[] = [];
   const moves: Move[] = [];
+  const interest = { cards: 0, savings: 0 };
   const transfer = (date: string, fromId: string, toId: string, amount: number, label: string, auto: boolean) => {
     const a = r2(Math.min(amount, Math.max(0, bal[fromId] ?? 0)));
     if (a <= 0 || !(toId in bal)) return;
@@ -170,7 +173,13 @@ export function runForecast(accounts: Account[], schedule: ScheduleEvent[], asOf
       if (p.cashId) today.push({ accountId: p.cashId, delta: -amount });
     }
     for (const x of scenario.extra ?? []) if (x.date === date) today.push({ accountId: x.accountId, delta: x.delta });
-    if (dom === last) for (const a of rated) today.push({ accountId: a.id, delta: monthlyInterest(a, bal[a.id]) });
+    if (dom === last)
+      for (const a of rated) {
+        const amount = monthlyInterest(a, bal[a.id]);
+        if (a.kind === "credit") interest.cards += amount;
+        else if (!isOwed(a)) interest.savings += amount;
+        today.push({ accountId: a.id, delta: amount });
+      }
 
     for (const m of scenario.moves ?? []) if (m.date === date) transfer(date, m.fromId, m.toId, m.amount, m.label, false);
 
@@ -210,5 +219,25 @@ export function runForecast(accounts: Account[], schedule: ScheduleEvent[], asOf
     monthly,
     liquidNow,
     cashLastsMonths: monthly.shortfall < 0 ? Math.round((liquidNow / -monthly.shortfall) * 10) / 10 : null,
+    interest: { cards: r2(interest.cards), savings: r2(interest.savings) },
   };
+}
+
+/**
+ * What paying a card off from savings tomorrow changes, from two full 12-month forecasts:
+ * the card interest you stop paying and the savings interest you give up (monthly averages).
+ * perMonth is exactly cardSaved − savingsLost, so every screen shows numbers that add up.
+ */
+export function payoffEffect(accounts: Account[], schedule: ScheduleEvent[], asOf: string, cardId: string, savingsId: string, cuts: Record<string, number> = {}) {
+  const card = accounts.find((a) => a.id === cardId)!;
+  const tomorrow = parse(asOf);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const date = iso(tomorrow);
+  const amount = r2(card.balance);
+  const base = runForecast(accounts, schedule, asOf, { cuts });
+  const alt = runForecast(accounts, schedule, asOf, { cuts, moves: [{ date, fromId: savingsId, toId: cardId, amount, label: "Pay off card" }] });
+  const n = base.months.length || 12;
+  const cardSaved = Math.round((base.interest.cards - alt.interest.cards) / n);
+  const savingsLost = Math.round((base.interest.savings - alt.interest.savings) / n);
+  return { date, amount, cardSaved, savingsLost, perMonth: cardSaved - savingsLost };
 }

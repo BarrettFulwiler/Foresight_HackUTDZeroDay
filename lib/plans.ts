@@ -1,7 +1,7 @@
 // Turns a what-if ("I want to…") into a concrete plan, using only the forecast engine's numbers.
 // Every sentence is filled in from calculated values; nothing here is guessed by an AI.
 import type { Account, ScheduleEvent } from "./finance";
-import { runForecast, type Forecast, type Scenario } from "./forecast";
+import { payoffEffect, runForecast, type Forecast, type Scenario } from "./forecast";
 import { longMonth, money, shortMonth } from "./format";
 import type { Prefs } from "./prefs";
 
@@ -49,7 +49,9 @@ function low(f: Forecast, days: number) {
   return pts.reduce((lo, p) => (p.balance < lo.balance ? p : lo), pts[0]);
 }
 
-export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleEvent[], asOf: string, goal?: Prefs["goal"]): Plan {
+// baseCuts: the user's budget changes from the Edit tab (category → monthly $ cut; negative = spend more).
+// They apply to both futures; a plan's own cuts stack on top.
+export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleEvent[], asOf: string, goal?: Prefs["goal"], baseCuts: Record<string, number> = {}): Plan {
   const find = (bank: string, type: string) => accounts.find((a) => a.bank === bank && a.type === type);
   const checking = find("PNC", "checking")!;
   const pncSavings = find("PNC", "savings")!;
@@ -57,7 +59,12 @@ export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleE
   const pncCard = find("PNC", "credit_card");
   const shield = { fromId: pncSavings.id, toId: checking.id, floor: FLOOR, topUpTo: TOP_UP_TO };
   const tomorrow = addDays(asOf, 1);
-  const run = (s: Scenario = {}) => runForecast(accounts, schedule, asOf, s);
+  const withBase = (c: Record<string, number> = {}) => {
+    const out = { ...baseCuts };
+    for (const [k, v] of Object.entries(c)) out[k] = (out[k] ?? 0) + v;
+    return out;
+  };
+  const run = (s: Scenario = {}) => runForecast(accounts, schedule, asOf, { ...s, cuts: withBase(s.cuts) });
   const base = run();
 
   // A one-time transfer now from Capital One savings that keeps PNC checking above the floor for 60 days.
@@ -120,13 +127,12 @@ export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleE
     const payoff: Scenario = { moves: [{ date: tomorrow, fromId: pncSavings.id, toId: pncCard.id, amount, label: "Pay off card" }], shield };
     const asIs = base;
     const withPlan = run(payoff);
-    const plainPayoff = run({ moves: payoff.moves });
-    const gain = (plainPayoff.months.at(-1)!.netWorth - asIs.months.at(-1)!.netWorth) / 12;
+    const effect = payoffEffect(accounts, schedule, asOf, pncCard.id, pncSavings.id, baseCuts);
     return {
       id,
       want: `Stop paying ${pncCard.apr}% interest on my PNC card.`,
       warnings: [
-        `Your PNC card carries ${money(pncCard.balance)} and costs about ${r((pncCard.balance * pncCard.apr) / 100 / 12)} a month in interest.`,
+        `Your PNC card carries ${money(pncCard.balance)} at ${pncCard.apr}%, about ${r(effect.cardSaved)} a month in interest over the next year.`,
         `Across both banks you pay ${r(base.monthly.cardInterest)} a month in card interest and earn ${r(base.monthly.savingsInterest)} on savings.`,
         neg(asIs) ? `Separately, ${neg(asIs)}, so checking needs a backstop either way.` : "",
       ].filter(Boolean),
@@ -136,7 +142,7 @@ export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleE
         `Turn on automatic top-ups: PNC Savings refills checking whenever it would drop below ${r(FLOOR)}.`,
       ],
       outcome: [
-        `About ${r(gain)} a month better off (${r(gain * 12)} a year) from interest you stop paying.`,
+        `About ${r(effect.perMonth)} a month better off (${r(effect.perMonth * 12)} a year): ${r(effect.cardSaved)} a month of card interest you stop paying, minus ${r(effect.savingsLost)} of savings interest that money would have earned.`,
         `Cash and savings drop from ${r(asIs.liquidNow)} to ${r(asIs.liquidNow - amount)} right away, still about ${Math.round(((asIs.liquidNow - amount) / -base.monthly.shortfall) * 10) / 10} months of cushion.`,
         safe(withPlan),
       ],

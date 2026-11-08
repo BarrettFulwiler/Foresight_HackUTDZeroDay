@@ -1991,3 +1991,36 @@
   gap: 4px;
   line-height: 1.45;
 }
+
+/* Edit tab: budgets that feed the forecast */
+.editWas {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.editChanged {
+  border-color: var(--accent);
+  background: #eef2ff;
+}
+
+.editEffect {
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.editActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.totalsNote {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}

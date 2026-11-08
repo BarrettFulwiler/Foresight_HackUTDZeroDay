@@ -18,13 +18,14 @@ type Props = {
   receipts: Receipt[];
   onTransfer: (fromNessieId: string, toNessieId: string, amount: number) => Promise<string>;
   onShowReceipts: () => void;
+  cuts: Record<string, number>; // budget changes from the Edit tab
 };
 
-export default function Advising({ accounts, schedule, asOf, goal, live, receipts, onTransfer, onShowReceipts }: Props) {
+export default function Advising({ accounts, schedule, asOf, goal, live, receipts, onTransfer, onShowReceipts, cuts }: Props) {
   const [preset, setPreset] = useState<PresetId>("trip");
   const [applied, setApplied] = useState<Partial<Record<PresetId, string[]>>>({});
   const [busy, setBusy] = useState(false);
-  const plan = useMemo(() => buildPlan(preset, accounts, schedule, asOf, goal), [preset, accounts, schedule, asOf, goal]);
+  const plan = useMemo(() => buildPlan(preset, accounts, schedule, asOf, goal, cuts), [preset, accounts, schedule, asOf, goal, cuts]);
   const facts = useMemo(() => planFacts(plan, accounts), [plan, accounts]);
 
   const nessie = (id: string) => accounts.find((a) => a.id === id)?.nessieId;
@@ -48,7 +49,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
     <div className={styles.advise}>
       <section className={styles.panel} aria-labelledby="ask-title">
         <h2 id="ask-title" className={styles.cardTitle}>Ask future-you</h2>
-        <p className={styles.cardSub}>Pick a what-if. Foresight runs your next 12 months both ways, using your real balances at both banks.</p>
+        <p className={styles.cardSub}>Pick a what-if. Foresight runs your next 12 months both ways, using your real balances at both banks{Object.keys(cuts).length ? " and your budgets from Edit" : ""}.</p>
         <div className={styles.presets} role="radiogroup" aria-label="What-if">
           {PRESETS.map((p) => (
             <button key={p.id} type="button" role="radio" aria-checked={preset === p.id} className={preset === p.id ? styles.presetOn : styles.preset} onClick={() => setPreset(p.id)}>
