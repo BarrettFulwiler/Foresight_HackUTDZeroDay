@@ -909,3 +909,343 @@
   border-left: 0;
   border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
 }
+
+/* ---------- Landing copy pass: clearer headline, one button color, readable small text ---------- */
+.title {
+  font-size: clamp(40px, 5.2vw, 68px);
+  line-height: 1.03;
+  letter-spacing: -0.035em;
+}
+
+.primary {
+  background: #1d4ed8; /* white text ≈ 6.7:1 */
+  box-shadow: 0 8px 24px #1d4ed840;
+}
+
+.primary:hover {
+  background: #1e40af;
+}
+
+.navLinks .navCta {
+  background: #1d4ed8;
+}
+
+.navLinks .navCta:hover {
+  background: #1e40af;
+}
+
+.fAxis {
+  fill: #5b6676; /* ≈ 5.7:1 on white */
+}
+
+/* Hero card, simplified: the shortfall and the full plan lead. */
+.fTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.fBadge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #3730a3;
+  background: #e0e7ff;
+}
+
+.fTopNote {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fWant {
+  font-size: 17px;
+  margin-top: 2px;
+}
+
+.fBig {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #b91c1c;
+}
+
+.fChartTitle {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.fGrid {
+  stroke: #eceae4;
+  stroke-width: 1;
+}
+
+.fMark {
+  stroke: #7c3aed;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.fMarkLabel {
+  font-size: 11px;
+  font-weight: 700;
+  fill: #6d28d9;
+}
+
+.fFix {
+  display: grid;
+  gap: 6px;
+}
+
+.fPlan {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.fApprove {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* "Ask your own what-if" card */
+.askCard {
+  margin: 0;
+  width: min(100%, 440px);
+  justify-self: center;
+  display: grid;
+  gap: 12px;
+  padding: 22px;
+  background: var(--card);
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  box-shadow: 0 20px 50px #0e172614;
+}
+
+.askQ {
+  justify-self: end;
+  max-width: 85%;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 18px 18px 6px 18px;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.askA {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 18px 18px 18px 6px;
+  background: #f4f4f6;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.askA p {
+  margin: 0;
+}
+
+.askSteps {
+  margin: -4px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+  font-size: 13px;
+}
+
+.fOutcomeStatic {
+  font-weight: 650;
+  color: #15803d;
+}
+
+.askNote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Hero: start both columns at the top (the card is taller, so centering left a gap above the copy). */
+.hero {
+  align-items: start;
+  padding-top: 40px;
+}
+
+.heroCopy {
+  padding-top: 24px;
+}
+
+.proof {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 20px 0 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.proof li {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.proof strong {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.proof span {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+@media (max-width: 600px) {
+  .proof {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+/* Calmer first impression: amber for a projected (not yet real) problem, a neutral line for "as is".
+   Red is reserved for nothing here; blue is the plan, green is the good outcome. */
+.fWarn {
+  background: #fffbeb;
+  border: 1.5px solid color-mix(in srgb, #d97706 40%, transparent);
+}
+
+.fBig {
+  color: #92400e;
+}
+
+.fRed {
+  stroke: #94a3b8;
+}
+
+.fSwRed {
+  background: #94a3b8;
+}
+
+.fZone {
+  fill: #fef3c7;
+  opacity: 0.45;
+}
+
+.fZero {
+  stroke: #b45309;
+  opacity: 0.6;
+}
+
+.fAxisZero {
+  fill: #92400e;
+}
+
+.fDot {
+  fill: #d97706;
+}
+
+.fDotStem {
+  stroke: #d97706;
+}
+
+.fDotLabel {
+  fill: #92400e;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .fBig {
+    font-size: 19px;
+  }
+}
+
+/* Hero card, positive-first: the good outcome leads. */
+.fGood {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f0fdf4;
+  border: 1.5px solid color-mix(in srgb, #16a34a 35%, transparent);
+}
+
+.fGood p:last-child {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.fBigGood {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #15803d;
+}
+
+.fZeroCalm {
+  stroke: #cbd5e1;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.fBlueFirst {
+  stroke: var(--accent);
+  stroke-width: 3;
+  animation: fDraw 1.4s ease-out 0.3s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fBlueFirst {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .fBigGood {
+    font-size: 19px;
+  }
+}
+
+/* Built with: logos left of each name */
+.builtList li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.builtLogo {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.builtNote {
+  margin: 14px auto 0;
+  max-width: 560px;
+  font-size: 12px;
+  color: var(--muted);
+}

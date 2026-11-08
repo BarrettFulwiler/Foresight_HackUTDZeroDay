@@ -1,24 +1,27 @@
-// Landing page art: the Advising screen in miniature, computed by the same forecast as the dashboard,
-// so the numbers a visitor sees here are the ones they'll see after clicking "Try the demo".
-import type { Account } from "../lib/finance";
+// Landing page art: the Advising screen in miniature, computed by the same forecast as the demo, so the
+// numbers a visitor sees here are the ones they'll see after clicking "Try the demo". Labeled as a demo
+// preview: nothing here moves money; in the app the user reviews and approves each transfer.
 import type { Forecast } from "../lib/forecast";
 import { money, shortMonth } from "../lib/format";
 import { FLOOR, type Plan, shortDay } from "../lib/plans";
+import type { CustomPlan } from "../lib/whatif";
 import styles from "./landing.module.css";
 
 const W = 360;
-const H = 150;
-const PAD = { top: 10, right: 8, bottom: 22, left: 8 };
+const H = 160;
+const PAD = { top: 16, right: 8, bottom: 22, left: 8 };
+const dayBefore = (iso: string) => new Date(Date.parse(iso) - 86400000).toISOString().slice(0, 10);
 
-function MiniChart({ asIs, withPlan }: { asIs: Forecast; withPlan: Forecast }) {
+function MiniChart({ asIs, withPlan, markDate, markLabel, planOnly = false }: { asIs: Forecast; withPlan: Forecast; markDate?: string; markLabel?: string; planOnly?: boolean }) {
   const a = asIs.checkingDaily;
   const b = withPlan.checkingDaily;
-  const all = [...a, ...b].map((p) => p.balance);
+  const all = (planOnly ? b : [...a, ...b]).map((p) => p.balance);
   const max = Math.max(FLOOR, ...all);
   const min = Math.min(0, ...all);
   // Show as much below $0 as above it; "as is" stops where it leaves the bottom. The plan line is never cut.
+  // planOnly (the hero) shows just the plan's future, with $0 as a quiet baseline.
   const limit = Math.min(-max, Math.min(0, ...b.map((p) => p.balance)) * 1.1);
-  const lo = Math.max(min * 1.05, limit);
+  const lo = planOnly ? min - max * 0.12 : Math.max(min * 1.05, limit);
   const hi = max * 1.08;
   const right = W - PAD.right;
   const bottom = H - PAD.bottom;
@@ -29,25 +32,37 @@ function MiniChart({ asIs, withPlan }: { asIs: Forecast; withPlan: Forecast }) {
   const cut = a.findIndex((p) => p.balance < lo);
   const asIsPts =
     cut > 0 ? [...sample(a.slice(0, cut)), { i: cut - 1 + (a[cut - 1].balance - lo) / (a[cut - 1].balance - a[cut].balance), v: lo }] : sample(a);
-  const negAt = asIs.firstNegative ? a.indexOf(asIs.firstNegative) : -1;
+  const negAt = !planOnly && asIs.firstNegative ? a.indexOf(asIs.firstNegative) : -1;
+  const markAt = markDate ? a.findIndex((p) => p.date === markDate) : -1;
   const zero = y(0);
+  const topTick = Math.floor(max / 1000) * 1000;
   const months = a.map((p, i) => ({ p, i })).filter(({ p }) => p.date.endsWith("-01")).filter((_, k) => k % 3 === 0);
   const anchor = (px: number) => (px - PAD.left < 20 ? "start" : right - px < 20 ? "end" : "middle");
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className={styles.fChart} aria-hidden="true">
-      <rect x={PAD.left} y={zero} width={right - PAD.left} height={Math.max(0, bottom - zero)} className={styles.fZone} />
-      <line x1={PAD.left} x2={right} y1={zero} y2={zero} className={styles.fZero} />
-      <text x={PAD.left + 2} y={zero + 13} className={styles.fAxisZero}>$0</text>
-      <path d={line(asIsPts)} pathLength={1} className={`${styles.fLine} ${styles.fRed}`} />
-      <path d={line(sample(b))} pathLength={1} className={`${styles.fLine} ${styles.fBlue}`} />
+      {!planOnly && <rect x={PAD.left} y={zero} width={right - PAD.left} height={Math.max(0, bottom - zero)} className={styles.fZone} />}
+      {topTick > 0 && (
+        <>
+          <line x1={PAD.left} x2={right} y1={y(topTick)} y2={y(topTick)} className={styles.fGrid} />
+          <text x={PAD.left + 2} y={y(topTick) - 4} className={styles.fAxis}>{money(topTick, false)}</text>
+        </>
+      )}
+      <line x1={PAD.left} x2={right} y1={zero} y2={zero} className={planOnly ? styles.fZeroCalm : styles.fZero} />
+      <text x={PAD.left + 2} y={planOnly ? zero - 4 : zero + 13} className={planOnly ? styles.fAxis : styles.fAxisZero}>$0</text>
+      {markAt >= 0 && (
+        <g>
+          <line x1={x(markAt)} x2={x(markAt)} y1={PAD.top - 6} y2={bottom} className={styles.fMark} />
+          <text x={x(markAt)} y={PAD.top - 8} textAnchor="middle" className={styles.fMarkLabel}>{markLabel}</text>
+        </g>
+      )}
+      {!planOnly && <path d={line(asIsPts)} pathLength={1} className={`${styles.fLine} ${styles.fRed}`} />}
+      <path d={line(sample(b))} pathLength={1} className={`${styles.fLine} ${planOnly ? styles.fBlueFirst : styles.fBlue}`} />
       {negAt >= 0 && (
         <g className={styles.fPop}>
           <circle cx={x(negAt)} cy={zero} r={4.5} className={styles.fDot} />
-          <text x={x(negAt)} y={bottom - 6} textAnchor="middle" className={styles.fDotLabel}>
-            {shortDay(asIs.firstNegative!.date)}
-          </text>
           <line x1={x(negAt)} x2={x(negAt)} y1={zero + 6} y2={bottom - 18} className={styles.fDotStem} />
+          <text x={x(negAt)} y={bottom - 6} textAnchor="middle" className={styles.fDotLabel}>{shortDay(asIs.firstNegative!.date)}</text>
         </g>
       )}
       {months.map(({ p, i }) => (
@@ -57,67 +72,96 @@ function MiniChart({ asIs, withPlan }: { asIs: Forecast; withPlan: Forecast }) {
   );
 }
 
-export function FuturesCard({ plan, accounts, tripDate }: { plan: Plan; accounts: Account[]; tripDate: string }) {
-  const neg = plan.asIs.firstNegative;
-  const move = plan.nowMoves[0];
-  const name = (id: string) => {
-    const acct = accounts.find((x) => x.id === id);
-    return acct ? `${acct.bank} ${acct.type === "savings" ? "savings" : acct.type === "checking" ? "checking" : acct.name.toLowerCase()}` : id;
-  };
-  const safe = plan.withPlan.firstNegative
-    ? `With the plan, checking still dips on ${shortDay(plan.withPlan.firstNegative.date)}.`
-    : `With the plan, checking never goes negative. Lowest point: ${money(plan.withPlan.lowest.balance, false)}.`;
+function Legend() {
   return (
-    <figure className={styles.futures} aria-label="Example from the demo: a trip that would overdraw checking, and the transfer that fixes it">
-      <p className={styles.fLabel}>Present-you wants</p>
-      <p className={styles.fWant}>{plan.want}</p>
+    <p className={styles.fLegend}>
+      <span><i className={styles.fSwRed} aria-hidden="true" /> As is</span>
+      <span><i className={styles.fSwBlue} aria-hidden="true" /> With the plan</span>
+    </p>
+  );
+}
 
-      <MiniChart asIs={plan.asIs} withPlan={plan.withPlan} />
-      <p className={styles.fLegend}>
-        <span><i className={styles.fSwRed} aria-hidden="true" /> As is</span>
-        <span><i className={styles.fSwBlue} aria-hidden="true" /> With the plan</span>
-      </p>
+const outcomeLine = (f: Forecast) =>
+  f.firstNegative
+    ? `Even with the plan, checking dips on ${shortDay(f.firstNegative.date)}.`
+    : `With the full plan, checking stays above $0 for the whole 12-month forecast. Lowest point: ${money(f.lowest.balance, false)}.`;
 
-      <div className={`${styles.fWarn} ${styles.fPop}`}>
-        <p className={styles.fLabel}>Future-you warns</p>
+/** Hero: the trip what-if from the demo, led by the good outcome, with every part of the plan that produces it.
+ *  (The "as is" future, with its overdraft, is shown further down the page and in the demo itself.) */
+export function FuturesCard({ plan, tripDate, tripTarget }: { plan: Plan; tripDate: string; tripTarget: number }) {
+  const ok = !plan.withPlan.firstNegative;
+  const bridge = plan.nowMoves[0];
+  return (
+    <figure className={styles.futures} aria-label="Demo preview: a trip, and the plan that makes it work">
+      <div className={styles.fTop}>
+        <span className={styles.fBadge}>Demo preview</span>
+        <span className={styles.fTopNote}>Sample customer · live Nessie demo balances</span>
+      </div>
+
+      <div>
+        <p className={styles.fLabel}>Present-you wants</p>
+        <p className={styles.fWant}>{plan.want}</p>
+      </div>
+
+      <div className={styles.fGood}>
+        <p className={styles.fLabel}>Future-you says</p>
+        <p className={styles.fBigGood}>{ok ? "You can take the trip." : "The trip is within reach."}</p>
         <p>
-          {neg
-            ? `PNC checking is overdrawn on ${shortDay(neg.date)}${neg.date < tripDate ? ", months before the trip" : ""}.`
-            : `PNC checking stays positive. Lowest point: ${money(plan.asIs.lowest.balance, false)}.`}
+          {ok
+            ? `With the plan, PNC checking stays above $0 for all 12 months. Lowest point: ${money(plan.withPlan.lowest.balance, false)}.`
+            : `With the plan, checking still dips on ${shortDay(plan.withPlan.firstNegative!.date)}, so the plan needs one more step.`}
         </p>
       </div>
 
-      {move && (
-        <div className={styles.fFix}>
-          <div>
-            <p className={styles.fLabel}>The fix is at your other bank</p>
-            <p>
-              Move <strong>{money(move.amount, false)}</strong> from {name(move.fromId)} to {name(move.toId)}.
-            </p>
-          </div>
-          <div className={styles.fAction}>
-            <span className={styles.fApply}>Apply plan</span>
-            <span className={styles.fDone}>✓ Sent via Nessie</span>
-          </div>
-        </div>
-      )}
-      <p className={`${styles.fOutcome} ${styles.fLate}`}>{safe}</p>
+      <div>
+        <p className={styles.fChartTitle}>Projected PNC checking balance, with the plan</p>
+        <MiniChart asIs={plan.asIs} withPlan={plan.withPlan} markDate={tripDate} markLabel="Trip" planOnly />
+      </div>
+
+      <div className={`${styles.fFix} ${styles.fPop}`}>
+        <p className={styles.fLabel}>How you get there</p>
+        <ul className={styles.fPlan}>
+          {bridge && (
+            <li>
+              Move <strong>{money(bridge.amount, false)}</strong> from Capital One savings to PNC checking now
+            </li>
+          )}
+          <li>Trim dining and shopping by $150 a month</li>
+          <li>Pay the {money(tripTarget, false)} trip from PNC savings on {shortDay(dayBefore(tripDate))}</li>
+          <li>Automatic top-ups from PNC savings if checking would drop below {money(FLOOR, false)}</li>
+        </ul>
+        <p className={styles.fApprove}>You review and approve each transfer. Apply sends it through Capital One&rsquo;s Nessie API.</p>
+      </div>
     </figure>
   );
 }
 
-export function WarnCard({ base, asOf }: { base: Forecast; asOf: string }) {
-  const neg = base.firstNegative;
-  const days = neg ? Math.round((Date.parse(neg.date) - Date.parse(asOf)) / 86400000) : 0;
+/** "Ask your own what-if" section: a typed question run through the same engine as the in-app chat. */
+export function AskCard({ question, plan }: { question: string; plan: CustomPlan }) {
+  const neg = plan.asIs.firstNegative;
   return (
-    <figure className={styles.warnCard} aria-label="Example from the demo: the checking safety card">
-      <p className={styles.fLabel}><span className={neg ? styles.warnDotBad : styles.warnDotGood} aria-hidden="true" /> PNC checking safety</p>
-      <p className={styles.warnValue}>{neg ? `Overdrawn ${shortDay(neg.date)}` : `Lowest ${money(base.lowest.balance, false)}`}</p>
-      <p className={styles.warnSub}>
-        {neg ? `In ${days} days, if nothing changes. ` : "Stays positive all year. "}
-        {base.monthly.shortfall < 0 ? `Bills outrun paychecks by ${money(-base.monthly.shortfall, false)} a month.` : ""}
+    <figure className={styles.askCard} aria-label="Demo preview: a typed what-if and the calculated answer">
+      <div className={styles.fTop}>
+        <span className={styles.fBadge}>Demo preview</span>
+        <span className={styles.fTopNote}>Calculated by the forecast</span>
+      </div>
+      <p className={styles.askQ}>{question}</p>
+      <div className={styles.askA}>
+        <p>
+          <strong>As is:</strong>{" "}
+          {neg ? `PNC checking is projected to be overdrawn on ${shortDay(neg.date)} (${money(neg.balance)}).` : "PNC checking stays positive."}
+        </p>
+        <MiniChart asIs={plan.asIs} withPlan={plan.withPlan} />
+        <Legend />
+        <p><strong>The plan:</strong></p>
+        <ol className={styles.askSteps}>
+          {plan.steps.map((s) => <li key={s}>{s}</li>)}
+        </ol>
+        <p className={styles.fOutcomeStatic}>{outcomeLine(plan.withPlan)}</p>
+      </div>
+      <p className={styles.askNote}>
+        In the app, Gemini reads the question and writes this answer in future-you&rsquo;s voice. Every number in the reply must match one the forecast calculated.
       </p>
-      <p className={styles.warnFoot}>Worked out day by day from live balances at both banks.</p>
     </figure>
   );
 }

@@ -35,10 +35,12 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   const [step, setStep] = useState(0);
   const [p, setP] = useState<Prefs>(BLANK);
 
-  // ?demo=1 pre-fills every step; otherwise start from what the sign-up form passed along.
+  // ?demo=1 goes straight to the dashboard with the demo profile, so visitors see the forecast first
+  // (they can customize later from the avatar). Otherwise start from what the sign-up form passed along.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("demo")) {
-      setP(DEMO_PREFS);
+      savePrefs({ ...DEMO_PREFS, completedAt: new Date().toISOString() });
+      router.replace("/dashboard?welcome=1");
       return;
     }
     try {
