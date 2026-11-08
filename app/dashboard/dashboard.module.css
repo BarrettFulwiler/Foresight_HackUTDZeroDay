@@ -1215,24 +1215,11 @@
 
 .healthCard {
   --status: var(--line);
-  --pad: 24px;
-  position: relative;
   display: grid;
   grid-template-rows: auto auto 1fr auto; /* label, value, detail, footer pinned to the bottom */
   gap: 6px;
-}
-
-/* Straight status bar at the top, inset to line up with the card's content edges
-   (a full-width border would bend around the rounded corners). */
-.healthCard::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: var(--pad);
-  right: var(--pad);
-  height: 4px;
-  border-radius: 0 0 4px 4px;
-  background: var(--status);
+  /* Status shown as a tinted outline that follows the rounded corners (plus the dot and value color). */
+  border: 1.5px solid color-mix(in srgb, var(--status) 45%, transparent);
 }
 
 .h_bad {
@@ -1839,7 +1826,6 @@
   }
 
   .panel {
-    --pad: 18px;
     padding: 18px;
     border-radius: 20px;
   }
