@@ -31,8 +31,9 @@ const settingUp = new Set<string>();
  * Runs once right after Clerk signs someone in. Returns where to send them:
  * - an existing member goes to the dashboard;
  * - a brand-new sign-up (it carries the details from our form) gets a Nessie customer, then onboarding or the dashboard;
- * - anyone else (e.g. "Sign in with Google" for a Google account that never signed up, which Clerk turns into a new
- *   user) is removed again and told to create an account first.
+ * - someone new who used "Continue with Google" without our form (Clerk makes them a new user) gets a personal
+ *   account from their Google profile, so Google works from both the Sign in and Create account tabs.
+ *   Company accounts still need the Create account form (it asks for the company name).
  */
 export async function finishSignIn(): Promise<string> {
   const { userId } = await auth();
@@ -42,12 +43,14 @@ export async function finishSignIn(): Promise<string> {
   // Returning members pass through onboarding too: it forwards them to their dashboard if this browser already has their setup.
   if ((user.publicMetadata as Partial<Member>).nessieCustomerId) return "/onboarding?resume=1";
 
-  const d = user.unsafeMetadata as Details;
-  const type: AccountType | null = d.type === "company" ? "company" : d.type === "individual" ? "individual" : null;
-  const firstName = clean(d.firstName) || user.firstName || "";
-  const lastName = clean(d.lastName) || user.lastName || "";
+  const d = (user.unsafeMetadata ?? {}) as Details;
+  // No type means they came straight from a provider like Google, not our form: treat them as a personal account.
+  const type: AccountType = d.type === "company" ? "company" : "individual";
+  const emailName = clean(user.primaryEmailAddress?.emailAddress?.split("@")[0]);
+  const firstName = clean(d.firstName) || clean(user.firstName) || emailName;
+  const lastName = clean(d.lastName) || clean(user.lastName); // some Google accounts have no last name
   const companyName = clean(d.companyName);
-  if (!type || (type === "individual" ? !firstName || !lastName : !companyName)) {
+  if (type === "individual" ? !firstName : !companyName) {
     await client.users.deleteUser(userId).catch(() => {});
     return "/start?mode=signin&error=no_account";
   }
@@ -56,7 +59,8 @@ export async function finishSignIn(): Promise<string> {
   settingUp.add(userId);
   let customerId = "";
   try {
-    const customer = type === "company" ? await createCustomer(companyName, "Company") : await createCustomer(firstName, lastName);
+    // Nessie requires a last name, so a single-name Google account gets a placeholder there (not in Clerk).
+    const customer = type === "company" ? await createCustomer(companyName, "Company") : await createCustomer(firstName, lastName || "Member");
     customerId = customer.id;
     if (type === "company") {
       await openAccount(customerId, "Checking", "Business Checking");
@@ -65,8 +69,8 @@ export async function finishSignIn(): Promise<string> {
       await openAccount(customerId, "Checking", "Everyday Checking");
       await openAccount(customerId, "Savings", "Savings");
     }
-    const name = type === "company" ? companyName : `${firstName} ${lastName}`;
-    await client.users.updateUser(userId, type === "company" ? { firstName: companyName } : { firstName, lastName });
+    const name = type === "company" ? companyName : `${firstName} ${lastName}`.trim();
+    await client.users.updateUser(userId, type === "company" ? { firstName: companyName } : { firstName, ...(lastName ? { lastName } : {}) });
     await client.users.updateUserMetadata(userId, { publicMetadata: { type, name, nessieCustomerId: customerId } });
     return "/onboarding"; // personal and business both set up their view next
   } catch {
