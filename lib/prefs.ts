@@ -60,6 +60,14 @@ export const DEMO_PREFS: Prefs = {
   completedAt: "",
 };
 
+// The demo when "My company" is picked: same profile, business goals.
+export const DEMO_BUSINESS_PREFS: Prefs = {
+  ...DEMO_PREFS,
+  accountType: "company",
+  goals: ["reserve", "payroll"],
+  goal: { kind: "reserve", label: "3-month operating reserve", target: 150000, saved: 40000, by: "2027-06" },
+};
+
 const KEY = "foresight.prefs";
 export const LIST_KEY = "foresight.categoriesOpen"; // read by the spending chart
 
