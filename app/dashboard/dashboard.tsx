@@ -6,6 +6,7 @@ import { categoryTotals, monthlyTotals, runForecast, type Forecast } from "../..
 import { categoryMeta, longMonth, money } from "../../lib/format";
 import { shortDay } from "../../lib/plans";
 import { GOAL_OPTIONS, type Prefs, monthsUntil, usePrefs } from "../../lib/prefs";
+import { DISPLAY_CARDS, type Display, useDisplay } from "../../lib/display";
 import { type Summary, summarize } from "../../lib/summary";
 import SpendingDonut from "./spending-donut";
 import SavingsChart from "./savings-chart";
@@ -39,6 +40,7 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
   const [tab, setTab] = useState<Tab>("View");
   const latest = data.months.at(-1)!;
   const { prefs, ready } = usePrefs();
+  const { display, set: setDisplay, edited: displayEdited, reset: resetDisplay } = useDisplay(prefs);
   const [welcome, setWelcome] = useState(false);
 
   // One shared set of balances for every tab. Transfers update it, so View reflects Move right away.
@@ -63,6 +65,7 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
       localStorage.setItem(BUDGETS_KEY, JSON.stringify(next));
     } catch {}
   };
+  const monthlyBudget = useMemo(() => ({ ...typical, ...budgets }), [typical, budgets]);
   const cuts = useMemo(() => Object.fromEntries(Object.entries(budgets).filter(([k]) => k in typical).map(([k, v]) => [k, typical[k] - v])), [budgets, typical]);
 
   const refreshAccounts = useCallback(async () => {
@@ -138,6 +141,7 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
           <a href="/dashboard" aria-current="page">Individual</a>
           <a href="/dashboard/company">Company</a>
         </nav>
+        <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
         <div className={styles.profile}>
           <div>
             <p className={styles.hello}>Welcome back{prefs?.name ? `, ${prefs.name}` : ""}</p>
@@ -159,19 +163,22 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
         {tab === "View" && (
           <>
             {welcome && prefs && <Welcome prefs={prefs} onClose={() => setWelcome(false)} />}
-            <Highlights prefs={prefs} ready={ready} sum={sum} />
+            <Highlights prefs={prefs} ready={ready} sum={sum} display={display} />
             <div className={styles.row}>
-              <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={prefs?.period ?? 3} /></section>
-              <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} /></section>
+              <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={display.spendingMonths} layout={display.spending} budget={monthlyBudget} custom={Object.keys(budgets)} /></section>
+              <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} layout={display.history} /></section>
             </div>
-            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={prefs?.units ?? "dollars"} cuts={cuts} />
-            <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} />
-            <MoneySummary accounts={accounts} source={source} />
+            <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={display.cash} cuts={cuts} />
+            <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} layout={display.budget} />
+            <MoneySummary accounts={accounts} source={source} layout={display.accounts} />
           </>
         )}
         {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} />}
         {tab === "Edit" && (
-          <EditBudgets typical={typical} budgets={budgets} onChange={updateBudgets} cuts={cuts} accounts={accounts} schedule={data.schedule} asOf={data.asOf} onOpen={setTab} />
+          <>
+            <EditDisplay display={display} onSet={setDisplay} edited={displayEdited} onReset={resetDisplay} onOpen={setTab} />
+            <EditBudgets typical={typical} budgets={budgets} onChange={updateBudgets} cuts={cuts} accounts={accounts} schedule={data.schedule} asOf={data.asOf} onOpen={setTab} />
+          </>
         )}
         {tab === "Advising" && (
           <Advising
@@ -212,8 +219,8 @@ function Welcome({ prefs, onClose }: { prefs: Prefs; onClose: () => void }) {
   );
 }
 
-function Highlights({ prefs, ready, sum }: { prefs: Prefs | null; ready: boolean; sum: Summary }) {
-  const days = prefs?.units === "days";
+function Highlights({ prefs, ready, sum, display }: { prefs: Prefs | null; ready: boolean; sum: Summary; display: Display }) {
+  const days = display.cash === "days";
   return (
     <div className={styles.highlights}>
       <section className={`${styles.panel} ${styles.cashCard}`} aria-label="Cash">
@@ -226,7 +233,7 @@ function Highlights({ prefs, ready, sum }: { prefs: Prefs | null; ready: boolean
         </p>
       </section>
       {prefs && prefs.goals.length > 0 ? (
-        <GoalCard goal={prefs.goal} asOf={sum.asOf} />
+        <GoalCard goal={prefs.goal} asOf={sum.asOf} style={display.goal} />
       ) : ready ? (
         <section className={`${styles.panel} ${styles.setupCard}`}>
           <h2 className={styles.cardTitle}>Make it yours</h2>
@@ -240,7 +247,7 @@ function Highlights({ prefs, ready, sum }: { prefs: Prefs | null; ready: boolean
   );
 }
 
-function GoalCard({ goal, asOf }: { goal: Prefs["goal"]; asOf: string }) {
+function GoalCard({ goal, asOf, style }: { goal: Prefs["goal"]; asOf: string; style: Display["goal"] }) {
   const meta = GOAL_OPTIONS.find((o) => o.kind === goal.kind);
   const pct = goal.target ? Math.min(100, (goal.saved / goal.target) * 100) : 0;
   const months = goal.by ? monthsUntil(asOf, goal.by) : 1;
@@ -254,17 +261,102 @@ function GoalCard({ goal, asOf }: { goal: Prefs["goal"]; asOf: string }) {
         </div>
         <a className={styles.editLink} href="/onboarding">Edit</a>
       </div>
-      <p className={styles.goalNums}><strong>{money(goal.saved, false)}</strong> of {money(goal.target, false)}{goal.by ? ` by ${longMonth(goal.by)}` : ""}</p>
-      <div className={styles.meter} aria-label={`${pct.toFixed(0)}% funded`}><span style={{ width: `${pct}%` }} /></div>
-      <p className={styles.cardSub}>{pct.toFixed(0)}% funded · {money(perMonth, false)} a month for {months} month{months === 1 ? "" : "s"} keeps you on track</p>
+      {style === "ring" ? (
+        <div className={styles.goalRingRow}>
+          <ProgressRing pct={pct} />
+          <div>
+            <p className={styles.goalNums}><strong>{money(goal.saved, false)}</strong> of {money(goal.target, false)}</p>
+            <p className={styles.cardSub}>{goal.by ? `By ${longMonth(goal.by)} · ` : ""}{money(perMonth, false)} a month for {months} month{months === 1 ? "" : "s"} keeps you on track</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className={styles.goalNums}><strong>{money(goal.saved, false)}</strong> of {money(goal.target, false)}{goal.by ? ` by ${longMonth(goal.by)}` : ""}</p>
+          <div className={styles.meter} aria-label={`${pct.toFixed(0)}% funded`}><span style={{ width: `${pct}%` }} /></div>
+          <p className={styles.cardSub}>{pct.toFixed(0)}% funded · {money(perMonth, false)} a month for {months} month{months === 1 ? "" : "s"} keeps you on track</p>
+        </>
+      )}
     </section>
   );
 }
 
-function Budget({ income, spending, loans, month }: { income: number; spending: number; loans: number; month: string }) {
+// A percent-funded ring for the goal card (the "Ring" option on the Edit tab).
+function ProgressRing({ pct }: { pct: number }) {
+  const r = 34;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className={styles.ring} role="img" aria-label={`${pct.toFixed(0)}% funded`}>
+      <svg viewBox="0 0 84 84" aria-hidden="true">
+        <circle cx="42" cy="42" r={r} className={styles.ringTrack} />
+        <circle cx="42" cy="42" r={r} className={styles.ringFill} strokeDasharray={`${(pct / 100) * c} ${c}`} transform="rotate(-90 42 42)" />
+      </svg>
+      <span>{pct.toFixed(0)}%</span>
+    </div>
+  );
+}
+
+// Income steps down through spending and loan payments to what's left (red when it goes below zero).
+// Plain HTML rather than SVG, so the labels stay a readable size at any width.
+function Waterfall({ income, spending, loans }: { income: number; spending: number; loans: number }) {
+  const leftover = income - spending - loans;
+  // Y axis: round tick steps (1, 2, 2.5 or 5 × a power of ten), about 4 of them, and a range that ends on ticks.
+  const rawLo = Math.min(0, leftover);
+  const rawHi = Math.max(income, 0);
+  const rough = (rawHi - rawLo || 1) / 4;
+  const mag = 10 ** Math.floor(Math.log10(rough));
+  const tick = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((t) => t >= rough)!;
+  const lo = Math.floor(rawLo / tick) * tick;
+  const hi = Math.ceil(rawHi / tick) * tick;
+  const ticks = Array.from({ length: Math.round((hi - lo) / tick) + 1 }, (_, i) => hi - i * tick);
+  const y = (v: number) => 8 + ((hi - v) / (hi - lo || 1)) * 84; // % from the top, leaving room for value labels
+  const axisLabel = (v: number) => (v === 0 ? "$0" : `${v < 0 ? "-" : ""}$${Math.abs(v) >= 1000 ? `${(Math.abs(v) / 1000).toFixed(tick < 1000 ? 1 : 0)}k` : Math.abs(v)}`);
+  const steps = [
+    { label: "Income", from: 0, to: income, value: income },
+    { label: "Spending", from: income, to: income - spending, value: -spending },
+    { label: "Loan payments", from: income - spending, to: leftover, value: -loans },
+    { label: "Leftover", from: 0, to: leftover, value: leftover },
+  ];
+  return (
+    <div
+      className={styles.wf}
+      role="img"
+      aria-label={`Income ${money(income)}, minus spending ${money(spending)}, minus loan payments ${money(loans)}, leaves ${leftover < 0 ? "-" : ""}${money(Math.abs(leftover))}`}
+    >
+      <div className={styles.wfChart}>
+      <div className={styles.wfAxis} aria-hidden="true">
+        {ticks.map((t) => <span key={t} style={{ top: `${y(t)}%` }}>{axisLabel(t)}</span>)}
+      </div>
+      <div className={styles.wfPlot}>
+        {ticks.filter((t) => t !== 0).map((t) => <span key={t} className={styles.wfGrid} style={{ top: `${y(t)}%` }} />)}
+        <span className={styles.wfZero} style={{ top: `${y(0)}%` }} />
+        {steps.map((st, i) => {
+          const top = y(Math.max(st.from, st.to));
+          const bottom = y(Math.min(st.from, st.to));
+          const down = st.value < 0;
+          return (
+            <div key={st.label} className={styles.wfCol}>
+              <span className={down ? styles.wfLoss : styles.wfGain} style={{ top: `${top}%`, height: `max(2px, ${bottom - top}%)` }} />
+              <span className={styles.wfValue} style={down ? { top: `calc(${bottom}% + 4px)` } : { bottom: `calc(${100 - top}% + 4px)` }}>
+                {down ? "-" : "+"}{money(Math.abs(st.value), false)}
+              </span>
+              {i < steps.length - 1 && <span className={styles.wfStep} style={{ top: `${y(st.to)}%` }} />}
+            </div>
+          );
+        })}
+      </div>
+      </div>
+      <div className={styles.wfLabels} aria-hidden="true">
+        {steps.map((st) => <span key={st.label}>{st.label}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function Budget({ income, spending, loans, month, layout }: { income: number; spending: number; loans: number; month: string; layout: Display["budget"] }) {
   const out = spending + loans;
   const leftover = income - out;
   const used = income ? Math.min(100, (out / income) * 100) : 100;
+  const share = (v: number) => (income ? `${((v / income) * 100).toFixed(1)}%` : "—");
   return (
     <section className={styles.panel} aria-labelledby="budget-title">
       <div className={styles.cardHead}>
@@ -273,6 +365,27 @@ function Budget({ income, spending, loans, month }: { income: number; spending: 
           <p className={styles.cardSub}>{longMonth(month)} · what actually happened (the Health row above uses a typical month)</p>
         </div>
       </div>
+      {layout === "waterfall" ? (
+        <Waterfall income={income} spending={spending} loans={loans} />
+      ) : layout === "table" ? (
+        <div className={styles.tableWrap}>
+          <table className={styles.dataTable}>
+            <caption className={styles.srOnly}>Budget for {longMonth(month)}</caption>
+            <thead>
+              <tr><th scope="col">Item</th><th scope="col" className={styles.num}>Amount</th><th scope="col" className={styles.num}>Share of income</th></tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">Income</th><td className={`${styles.num} ${styles.pos}`}>{money(income)}</td><td className={styles.num}>100%</td></tr>
+              <tr><th scope="row">Spending</th><td className={`${styles.num} ${styles.neg}`}>-{money(spending)}</td><td className={styles.num}>{share(spending)}</td></tr>
+              <tr><th scope="row">Loan payments</th><td className={`${styles.num} ${styles.neg}`}>-{money(loans)}</td><td className={styles.num}>{share(loans)}</td></tr>
+            </tbody>
+            <tfoot>
+              <tr><th scope="row">Leftover</th><td className={`${styles.num} ${leftover < 0 ? styles.neg : styles.pos}`}>{leftover < 0 ? "-" : ""}{money(Math.abs(leftover))}</td><td className={styles.num}>{share(leftover)}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      ) : (
+      <>
       <div className={styles.budgetRow}>
         <div className={`${styles.budgetBox} ${leftover < 0 ? styles.budgetBad : styles.budgetGood}`}>
           <span>Leftover</span>
@@ -288,6 +401,8 @@ function Budget({ income, spending, loans, month }: { income: number; spending: 
       <div className={styles.meter} aria-label={`${used.toFixed(0)}% of income used`}>
         <span style={{ width: `${used}%` }} className={leftover < 0 ? styles.meterOver : undefined} />
       </div>
+      </>
+      )}
     </section>
   );
 }
@@ -394,7 +509,54 @@ function Move({ accounts, source, sourceError, receipts, onTransfer }: {
   );
 }
 
-// The Edit tab: monthly budgets per category, starting from the forecast's typical month.
+// The Edit tab, part 1: how each View card presents its data (chart or table, and so on).
+function EditDisplay({ display, onSet, edited, onReset, onOpen }: {
+  display: Display;
+  onSet: <K extends keyof Display>(key: K, value: Display[K]) => void;
+  edited: boolean;
+  onReset: () => void;
+  onOpen: (tab: Tab) => void;
+}) {
+  return (
+    <section className={`${styles.panel} ${styles.narrow}`} aria-labelledby="display-title">
+      <h2 id="display-title" className={styles.cardTitle}>Display</h2>
+      <p className={styles.cardSub}>Choose how each card on View shows your data. Changes apply right away and are saved on this device.</p>
+      <ul className={styles.displayList}>
+        {DISPLAY_CARDS.map((card) => (
+          <li key={card.id}>
+            <div className={styles.displayName}>
+              <strong>{card.title}</strong>
+              <span>{card.about}</span>
+            </div>
+            <div className={styles.displayControls}>
+              {card.settings.map((s) => (
+                <div key={s.key} className={styles.displaySetting}>
+                  <span id={`d-${s.key}`}>{s.label}</span>
+                  <div className={styles.segmented} role="radiogroup" aria-labelledby={`d-${s.key}`}>
+                    {s.options.map((o) => {
+                      const on = display[s.key] === o.value;
+                      return (
+                        <button key={String(o.value)} type="button" role="radio" aria-checked={on} className={on ? styles.segOn : undefined} onClick={() => onSet(s.key, o.value as never)}>
+                          {o.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className={styles.editActions}>
+        <button type="button" className={styles.linkBtn} onClick={() => onOpen("View")}>See it on View →</button>
+        {edited && <button type="button" className={styles.linkBtn} onClick={onReset}>Reset to defaults</button>}
+      </div>
+    </section>
+  );
+}
+
+// The Edit tab, part 2: monthly budgets per category, starting from the forecast's typical month.
 // Changes feed the same forecast as View and Advising, so all three always agree.
 function EditBudgets({ typical, budgets, onChange, cuts, accounts, schedule, asOf, onOpen }: {
   typical: Record<string, number>;

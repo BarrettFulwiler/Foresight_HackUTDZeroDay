@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { invalidateLiveBalances } from "../../../../../lib/live-accounts";
 import { getTransaction } from "../../../../../lib/nessie";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!/^txn_[a-z0-9]+$/i.test(id)) return NextResponse.json({ error: "Bad transaction id" }, { status: 400 });
   try {
     const t = await getTransaction(id);
+    if (t.status !== "pending") invalidateLiveBalances(); // money moved: the next balance read must be fresh
     return NextResponse.json({ id: t.id, status: t.status, amount: t.amount_cents / 100, decisionReason: t.decision_reason || "", updatedAt: t.updated_at });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Nessie request failed" }, { status: 502 });

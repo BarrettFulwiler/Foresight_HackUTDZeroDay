@@ -35,10 +35,12 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   const [step, setStep] = useState(0);
   const [p, setP] = useState<Prefs>(BLANK);
 
-  // ?demo=1 pre-fills every step; otherwise start from what the sign-up form passed along.
+  // ?demo=1 goes straight to the dashboard with the demo profile, so visitors see the forecast first
+  // (they can customize later from the avatar). Otherwise start from what the sign-up form passed along.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("demo")) {
-      setP(DEMO_PREFS);
+      savePrefs({ ...DEMO_PREFS, completedAt: new Date().toISOString() });
+      router.replace("/dashboard?welcome=1");
       return;
     }
     try {
@@ -83,7 +85,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   return (
     <main className={styles.page}>
       <header className={styles.top}>
-        <a className={styles.brand} href="/"><span className={styles.mark} aria-hidden="true" />{BRAND}</a>
+        <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
         <button type="button" className={styles.skip} onClick={() => finish({ ...DEMO_PREFS, name: p.name || DEMO_PREFS.name })}>Skip, use demo profile</button>
       </header>
 

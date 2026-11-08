@@ -29,7 +29,7 @@ export function planFacts(plan: Plan, accounts: Account[]): string[] {
     `The forecast covers the next 12 months, ${longMonth(plan.asIs.months[0].month)} to ${longMonth(plan.asIs.months.at(-1)!.month)}.`,
     `Each month, paychecks bring in ${r(m.income)}, spending is ${r(m.spending)}, loan payments are ${r(m.loanPayments)} and card interest is ${r(m.cardInterest)}.`,
     m.shortfall < 0 ? `Bills outrun paychecks by ${r(-m.shortfall)} a month.` : `Paychecks cover the bills with ${r(m.shortfall)} a month to spare.`,
-    `Now-you wants: ${plan.want}`,
+    `Present-you wants: ${plan.want}`,
     ...plan.warnings.map((w) => `Future-you warns: ${w}`),
     ...plan.steps.map((s, i) => `Plan step ${i + 1}: ${s}`),
     ...plan.outcome.map((o) => `With the plan: ${o}`),

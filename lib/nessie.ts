@@ -54,6 +54,8 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const getAccount = (id: string) => call<NessieAccount>(`/accounts/${id}`);
+/** All of a customer's accounts in one request (cheaper than one call per account, which trips Nessie's rate limit). */
+export const listCustomerAccounts = (customerId: string) => call<{ items: NessieAccount[] }>(`/customers/${customerId}/accounts`).then((r) => r.items);
 export const getTransaction = (id: string) => call<NessieTxn>(`/transactions/${id}`);
 
 export function createTransfer(fromId: string, toId: string, amountCents: number, description: string) {

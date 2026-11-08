@@ -1,31 +1,25 @@
 import type { Metadata } from "next";
 import styles from "./landing.module.css";
 import { BRAND, SLOGAN } from "../lib/brand";
+import { getDashboardData } from "../lib/finance";
+import { withLiveBalances } from "../lib/live-accounts";
+import { buildPlan } from "../lib/plans";
+import type { Prefs } from "../lib/prefs";
+import { buildCustomPlan, horizonMonths } from "../lib/whatif";
+import { AskCard, FuturesCard } from "./landing-futures";
 
-const STARTER_QUESTION = "Can I do a $1,500 trip in March?";
+// Opens the dashboard straight away with the demo profile (see app/onboarding).
 const DEMO_HREF = "/onboarding?demo=1";
-// The amounts in the example conversations are placeholders: swap in real C005 output once the forecast works.
+// The demo profile's goal (same as DEMO_PREFS in lib/prefs.ts), so the landing matches the demo.
+const DEMO_GOAL: Prefs["goal"] = { kind: "trip", label: "Trip to Cancún", target: 1500, saved: 960, by: "2027-03" };
+const ASK_EXAMPLE = "Can I afford a $3,000 car repair next month?";
 
 export const metadata: Metadata = {
   title: `${BRAND} · ${SLOGAN}`,
-  description: "See where your money is headed. Every account, every bank, one honest answer from future-you.",
+  description: "See what's ahead for your money across your banks, and plan with confidence.",
 };
-
-type Bubble = { from: "you" | "future"; text: string };
-
-const HERO_THREAD: Bubble[] = [
-  { from: "you", text: STARTER_QUESTION },
-  { from: "future", text: "Yes, if you move $300 from your Capital One savings in January. Without it, rent comes up $212 short." },
-  { from: "you", text: "do it" },
-  { from: "future", text: "Done. See you in March." },
-];
-
-const GUARD_THREAD: Bubble[] = [
-  { from: "future", text: "Heads up from March-you: this $240 purchase pushes your trip back 3 weeks." },
-  { from: "future", text: "Allow it anyway?" },
-  { from: "you", text: "skip it" },
-  { from: "future", text: "Held. The trip stays on track." },
-];
+// The hero card uses live Nessie balances, so it always shows the same numbers as the demo.
+export const dynamic = "force-dynamic";
 
 const BANKS = [
   { name: "PNC", accounts: ["Checking", "Savings", "CD", "IRA", "Credit card", "Auto loan", "Personal loan", "Mortgage"] },
@@ -33,48 +27,49 @@ const BANKS = [
 ];
 
 const STEPS = [
-  { title: "Ask in plain words", body: "Ask what you'd ask a friend who's good with money: can I afford this, and when?" },
-  { title: "Future-you checks everything", body: "Every account at every bank, in one picture. Code does the math and checks it before you see a single number." },
-  { title: "Say “do it”", body: "The money moves between your banks. And if a purchase would break the plan, future-you warns you first." },
+  { title: "See it", body: "Your accounts at both banks, projected day by day from today's balances. Foresight flags the projected date checking runs short." },
+  { title: "Plan it", body: "Pick a what-if (a trip, paying off a card, a surprise bill) or type your own. See both futures side by side, with a plan. Code does the math." },
+  { title: "Fix it", body: "Review the plan and approve the transfer. It moves between your banks through Nessie, and the forecast redraws from the new balances." },
 ];
 
 const TRUST = [
   { label: "Calculated", body: "Balances, bills and forecasts come from code, not from an AI's guess." },
-  { label: "Checked", body: "Every number is verified against your accounts before you see it." },
-  { label: "Explained", body: "Only then does it get put into plain words, from the you who's already there." },
+  { label: "Explained", body: "Gemini puts the calculated facts into plain words, in future-you's voice." },
+  { label: "Checked", body: "Every number in that reply must match one the forecast calculated, or Foresight doesn't show it." },
 ];
 
-const BUILT_WITH = ["PNC financial wellness data", "Capital One Nessie", "Next.js"];
+// Logos are the companies' own marks, used only to credit what the prototype is built on.
+const BUILT_WITH: { name: string; logo?: string }[] = [
+  { name: "PNC financial wellness data", logo: "/brand/logos/pnc.png" },
+  { name: "Capital One Nessie", logo: "/brand/logos/capitalone.png" },
+  { name: "Google Gemini", logo: "/brand/logos/gemini.svg" },
+  { name: "Next.js", logo: "/brand/logos/nextjs.svg" },
+];
 
-function Thread({ bubbles, name, label, animate = false }: { bubbles: Bubble[]; name: string; label: string; animate?: boolean }) {
-  return (
-    <figure className={styles.phone} aria-label={label}>
-      <div className={styles.phoneTop}>
-        <span className={styles.avatar} aria-hidden="true">{name.charAt(0)}</span>
-        <span className={styles.contact}>{name}</span>
-        <span className={styles.service}>in {BRAND}</span>
-      </div>
-      <div className={styles.thread}>
-        {bubbles.map((b, i) => (
-          <p
-            key={i}
-            className={`${styles.bubble} ${b.from === "you" ? styles.you : styles.future} ${animate ? styles.rise : ""}`}
-            style={animate ? ({ "--d": `${0.35 + i * 0.9}s` } as React.CSSProperties) : undefined}
-          >
-            {b.text}
-          </p>
-        ))}
-      </div>
-    </figure>
+export default async function Landing() {
+  const data = getDashboardData("C005");
+  const { accounts } = await withLiveBalances(data.accounts);
+  const plan = buildPlan("trip", accounts, data.schedule, data.asOf, DEMO_GOAL);
+  // The typed what-if example, run through the same engine as the in-app chat (the spec Gemini returns for it).
+  const askPlan = buildCustomPlan(
+    {
+      title: "Car repair",
+      kind: "event",
+      want: ASK_EXAMPLE,
+      interpretation: "A one-time $3,000 car repair next month, paid from PNC checking.",
+      oneOffAmount: 3000,
+      oneOffMonth: horizonMonths(data.asOf)[0],
+      oneOffLabel: "Car repair",
+    },
+    accounts,
+    data.schedule,
+    data.asOf,
   );
-}
-
-export default function Landing() {
   return (
     <main className={styles.page}>
       <header className={styles.nav}>
         <a className={styles.brand} href="/">
-          <span className={styles.mark} aria-hidden="true" />
+          <img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />
           {BRAND}
         </a>
         <nav className={styles.navLinks} aria-label="Main">
@@ -86,25 +81,34 @@ export default function Landing() {
 
       <section className={`${styles.wrap} ${styles.hero}`}>
         <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}>Your money, seen from the future</p>
-          <h1 className={styles.title}>{SLOGAN}.</h1>
+          <p className={styles.eyebrow}>{SLOGAN}</p>
+          <h1 className={styles.title}>Know you&rsquo;re covered before you spend.</h1>
           <p className={styles.lead}>
-            {BRAND} sees every account you have, at every bank, and shows you where your money is headed. Ask
-            &ldquo;{STARTER_QUESTION}&rdquo; and future-you answers with the numbers and a plan.
+            {BRAND} projects your balances at both banks day by day, so you can see what&rsquo;s ahead. Ask future-you a
+            what-if, and you get a plan you approve before any money moves.
           </p>
           <div className={styles.ctas}>
             <a className={styles.primary} href={DEMO_HREF}>Try the demo</a>
-            <a className={styles.secondary} href="/start">Get started</a>
+            <a className={styles.secondary} href="#how">How it works</a>
           </div>
-          <p className={styles.micro}>The demo uses a sample customer. Nothing to install.</p>
+          <p className={styles.micro}>
+            The demo opens straight to the dashboard, using PNC&rsquo;s synthetic customer data and Capital One&rsquo;s Nessie
+            sandbox. No real accounts or money.
+          </p>
+          <ul className={styles.proof}>
+            <li><strong>Day by day</strong><span>Every account projected 12 months ahead</span></li>
+            <li><strong>Both banks</strong><span>PNC and Capital One in one forecast</span></li>
+            <li><strong>Checked AI</strong><span>Every number Gemini writes must match the math</span></li>
+          </ul>
         </div>
         <div className={styles.heroArt}>
-          <Thread bubbles={HERO_THREAD} name="March-you" label="Example conversation: asking March-you about a trip" animate />
+          <FuturesCard plan={plan} tripDate={`${DEMO_GOAL.by}-10`} tripTarget={DEMO_GOAL.target} />
         </div>
       </section>
 
       <section className={`${styles.wrap} ${styles.banks}`} aria-labelledby="banks-title">
-        <h2 id="banks-title" className={styles.h2}>Every account. Every bank. One picture.</h2>
+        <h2 id="banks-title" className={styles.h2}>Both banks. One picture.</h2>
+        <p className={styles.body}>In the demo: one customer&rsquo;s PNC accounts and Capital One accounts, side by side.</p>
         <div className={styles.bankRow}>
           {BANKS.map((bank) => (
             <div key={bank.name} className={styles.bankCard}>
@@ -124,7 +128,7 @@ export default function Landing() {
 
       <section id="how" className={`${styles.wrap} ${styles.how}`} aria-labelledby="how-title">
         <p className={styles.eyebrow}>How it works</p>
-        <h2 id="how-title" className={styles.h2}>One question. One honest answer.</h2>
+        <h2 id="how-title" className={styles.h2}>See it. Plan it. Fix it.</h2>
         <ol className={styles.steps}>
           {STEPS.map((s, i) => (
             <li key={s.title} className={styles.step}>
@@ -138,14 +142,15 @@ export default function Landing() {
 
       <section className={`${styles.wrap} ${styles.guard}`} aria-labelledby="guard-title">
         <div>
-          <p className={styles.eyebrow}>It has your back</p>
-          <h2 id="guard-title" className={styles.h2}>Future-you warns you before the mistake, not after.</h2>
+          <p className={styles.eyebrow}>Ask your own</p>
+          <h2 id="guard-title" className={styles.h2}>Type any what-if. See both futures.</h2>
           <p className={styles.body}>
-            When a purchase would wreck your plan, it&rsquo;s held for a moment while future-you checks with you.
-            One tap decides whether it goes through.
+            Not just the presets. Ask in plain words, like a car repair next month or cutting dining by $100. Gemini
+            reads the question, the forecast runs both futures from the demo&rsquo;s live balances, and you get a plan
+            to review.
           </p>
         </div>
-        <Thread bubbles={GUARD_THREAD} name="March-you" label="Example conversation: March-you holding a purchase" />
+        <AskCard question={ASK_EXAMPLE} plan={askPlan} />
       </section>
 
       <section className={`${styles.wrap} ${styles.trust}`} aria-labelledby="trust-title">
@@ -165,18 +170,24 @@ export default function Landing() {
 
       <section className={`${styles.wrap} ${styles.tryIt}`} aria-labelledby="try-title">
         <h2 id="try-title" className={styles.h2}>See where your money is headed.</h2>
-        <p className={styles.body}>Two minutes of setup, then future-you takes it from there.</p>
+        <p className={styles.body}>The demo opens on the forecast. Set up your own view afterward if you like.</p>
         <div className={styles.ctas}>
           <a className={styles.primary} href={DEMO_HREF}>Try the demo</a>
-          <a className={styles.secondary} href="/start">Create an account</a>
+          <a className={styles.secondary} href="/onboarding">Set up your own view</a>
         </div>
       </section>
 
       <section className={`${styles.wrap} ${styles.built}`} aria-label="Built with">
         <p className={styles.eyebrow}>Built with</p>
         <ul className={styles.builtList}>
-          {BUILT_WITH.map((b) => <li key={b}>{b}</li>)}
+          {BUILT_WITH.map((b) => (
+            <li key={b.name}>
+              {b.logo && <img src={b.logo} alt="" width={20} height={20} className={styles.builtLogo} />}
+              {b.name}
+            </li>
+          ))}
         </ul>
+        <p className={styles.builtNote}>Logos are trademarks of their owners and are shown only to credit the tools and data this prototype uses. No endorsement implied.</p>
       </section>
 
       <footer className={styles.footer}>
