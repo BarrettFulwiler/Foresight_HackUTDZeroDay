@@ -10,7 +10,7 @@ const W = 640;
 const H = 240;
 const PAD = { top: 16, right: 12, bottom: 28, left: 12 };
 
-export default function SavingsChart({ points }: { points: Point[] }) {
+export default function SavingsChart({ points, topUps }: { points: Point[]; topUps?: { total: number; count: number } }) {
   const [range, setRange] = useState<Range>("1Y");
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -101,6 +101,12 @@ export default function SavingsChart({ points }: { points: Point[] }) {
         )}
         <circle cx={x(pts.length - 1)} cy={y(pts.at(-1)!.value)} r={4.5} className={styles.endDot} />
       </svg>
+      {topUps && topUps.total > 0 && (
+        <p className={styles.chartNote}>
+          This history includes {money(topUps.total, false)} moved in from an outside account ({topUps.count} deposits) in PNC&rsquo;s
+          sample data, which is why it rises. Without those, you&rsquo;re short each month; the forecast above leaves them out.
+        </p>
+      )}
     </div>
   );
 }

@@ -40,6 +40,17 @@ export type Txn = {
   account: string; // e.g. "PNC Checking ••0042"
   amount: number;
 };
+// One recurring money movement in a typical month, averaged from the last 3 months of history.
+// Fake top-ups from PNC's "unlisted external account" are left out on purpose.
+export type ScheduleEvent = {
+  day: number; // day of month (clamped to short months when projecting)
+  accountId: string;
+  delta: number; // change to the account's balance; for cards and loans, positive = more owed
+  flow: string; // income | expense | internal_transfer | non_cash
+  kind: string; // paycheck | payment | purchase | withdrawal | interest_accrual | ...
+  category: string;
+  label: string;
+};
 export type DashboardData = {
   customerId: string;
   asOf: string;
@@ -47,7 +58,30 @@ export type DashboardData = {
   months: MonthSpend[];
   savingsHistory: Point[];
   transactions: Txn[]; // spending only, oldest first
+  schedule: ScheduleEvent[]; // a typical month, for the forecast
+  topUps: { total: number; count: number }; // PNC's calibration deposits from an "unlisted external account"
 };
+
+function scheduleLabel(r: Record<string, string>) {
+  const d = r.description.toLowerCase();
+  if (r.category === "payroll") return r.account_type === "savings" ? "Paycheck (to savings)" : "Paycheck";
+  if (r.category === "debt_payment") {
+    if (d.includes("mortgage")) return "Mortgage payment";
+    if (d.includes("auto")) return "Auto loan payment";
+    if (d.includes("personal")) return "Personal loan payment";
+    if (d.includes("credit card") || r.account_type === "credit_card") return "Card payment";
+    return LOAN_TYPES.has(r.account_type) ? `${TYPE_INFO[r.account_type].name} payment` : "Debt payment";
+  }
+  if (r.category === "savings_contribution") return r.account_type === "checking" ? "To savings" : "From checking";
+  if (r.category === "investment_contribution") return d.includes("ira") ? "To IRA" : d.includes("cd") ? "To CD" : "Investment contribution";
+  if (r.category === "savings_withdrawal") return "Savings withdrawal";
+  if (r.transaction_type === "interest_accrual") return "Interest";
+  if (r.transaction_type === "fee") return "Fee";
+  const cat = r.category.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  if (r.transaction_type === "purchase") return `${cat} (card)`;
+  if (r.transaction_type === "withdrawal") return `${cat} (cash)`;
+  return `${cat} bill`;
+}
 
 const DATA_DIR = path.join(process.cwd(), "data");
 
@@ -105,9 +139,11 @@ export function getDashboardData(customerId = "C005"): DashboardData {
 
   const accountLabel = new Map(pncAccounts.map((a) => [a.id, `${a.bank} ${a.name} ••${a.mask}`]));
   const transactions: Txn[] = [];
+  const allRows: Record<string, string>[] = [];
   const byMonth = new Map<string, MonthSpend>();
   for (const r of readCsv("transactions.csv")) {
     if (r.customer_id !== customerId) continue;
+    allRows.push(r);
     const month = r.posted_date.slice(0, 7);
     const m = byMonth.get(month) ?? { month, income: 0, spending: 0, loanPayments: 0, byCategory: {} };
     const amount = Number(r.amount);
@@ -148,6 +184,31 @@ export function getDashboardData(customerId = "C005"): DashboardData {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, value]) => ({ month, value: round(value) }));
 
+  // Typical month: average each recurring movement over the last 3 months, keyed by account, day and type.
+  const recent = new Set(months.slice(-3).map((m) => m.month));
+  const n = Math.max(1, recent.size);
+  const groups = new Map<string, ScheduleEvent>();
+  for (const r of allRows) {
+    if (!recent.has(r.posted_date.slice(0, 7)) || r.flow_class === "external_transfer") continue;
+    const day = Number(r.posted_date.slice(8, 10));
+    const key = [r.account_id, r.transaction_type === "interest_accrual" ? 31 : day, r.flow_class, r.transaction_type, r.category, r.description].join("|");
+    const g = groups.get(key) ?? {
+      day: r.transaction_type === "interest_accrual" ? 31 : day, // interest posts at month end
+      accountId: r.account_id,
+      delta: 0,
+      flow: r.flow_class,
+      kind: r.transaction_type,
+      category: r.category,
+      label: scheduleLabel(r),
+    };
+    g.delta += Number(r.balance_change) / n;
+    groups.set(key, g);
+  }
+  const schedule = [...groups.values()]
+    .map((e) => ({ ...e, delta: round(e.delta) }))
+    .filter((e) => e.delta !== 0)
+    .sort((a, b) => a.day - b.day || b.delta - a.delta);
+
   const data: DashboardData = {
     customerId,
     asOf: accountRows[0]?.as_of_date ?? "",
@@ -155,6 +216,10 @@ export function getDashboardData(customerId = "C005"): DashboardData {
     months,
     savingsHistory,
     transactions: transactions.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
+    schedule,
+    topUps: allRows
+      .filter((r) => r.flow_class === "external_transfer")
+      .reduce((t, r) => ({ total: round(t.total + Number(r.balance_change)), count: t.count + 1 }), { total: 0, count: 0 }),
   };
   cache.set(customerId, data);
   return data;

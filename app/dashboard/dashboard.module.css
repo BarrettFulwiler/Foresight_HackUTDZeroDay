@@ -1209,6 +1209,112 @@
   border-bottom-left-radius: 6px;
 }
 
+/* ---------- Health indicators (from the forecast engine) ---------- */
+.health {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.healthCard {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  border-top: 4px solid var(--line);
+}
+
+.h_bad {
+  border-top-color: var(--neg);
+}
+
+.h_warn {
+  border-top-color: #f59e0b;
+}
+
+.h_good {
+  border-top-color: var(--pos);
+}
+
+.healthLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.healthValue {
+  margin: 0;
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.healthValue small {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.h_bad .healthValue {
+  color: var(--neg);
+}
+
+.healthSub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.healthFoot {
+  margin: 4px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dot_bad {
+  background: var(--neg);
+}
+
+.dot_warn {
+  background: #f59e0b;
+}
+
+.dot_good {
+  background: var(--pos);
+}
+
+.chartNote {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff8eb;
+  color: #7c5a12;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 960px) {
+  .health {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- Move tab: live transfers and Nessie receipts ---------- */
 .moveGrid {
   display: grid;
