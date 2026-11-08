@@ -1,27 +1,36 @@
 "use client";
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { SignIn, SignUp } from "@clerk/nextjs";
 import { BRAND, SLOGAN } from "../../lib/brand";
-import { loadPrefs } from "../../lib/prefs";
+import { AUTH_ERRORS } from "../../lib/auth-client";
 import styles from "../onboarding/onboarding.module.css";
 
-// Sign-in is not connected to a back end yet. PNC's kit has working /auth/register and /auth/login
-// routes; call them from submit() once the back end is running. Passwords are never stored here.
-export default function StartForm() {
-  const router = useRouter();
-  const [mode, setMode] = useState<"signup" | "signin">("signup");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+type Details = { type: "individual" | "company"; firstName: string; lastName: string; companyName: string };
 
-  function submit(e: FormEvent) {
+// Create account: pick Individual or Company and fill in the names, then Clerk's box takes email and password
+// (and rejects an email that already has an account). Sign in: Clerk's box (errors on an unknown account).
+// Both finish at /start/finish, which sets up the Nessie customer for new accounts.
+export default function StartForm({ initialMode, error, configured }: { initialMode: "signup" | "signin"; error?: string; configured: boolean }) {
+  const [mode, setMode] = useState(initialMode);
+  const [details, setDetails] = useState<Details>({ type: "individual", firstName: "", lastName: "", companyName: "" });
+  const [ready, setReady] = useState(false); // names filled in, show Clerk's email + password box
+  const problem = !configured ? "Login isn't set up yet. Add the Clerk keys to .env." : error ? (AUTH_ERRORS[error] ?? AUTH_ERRORS.failed) : "";
+  const set = (k: keyof Details, v: string) => setDetails((d) => ({ ...d, [k]: v }));
+
+  function next(e: FormEvent) {
     e.preventDefault();
     try {
-      sessionStorage.setItem("foresight.pending", JSON.stringify({ name: name.trim(), email: email.trim() }));
+      // Onboarding reads this after sign-up to greet them and preselect Individual or Company.
+      const name = details.type === "company" ? details.companyName.trim() : details.firstName.trim();
+      sessionStorage.setItem("foresight.pending", JSON.stringify({ name, type: details.type }));
     } catch {}
-    const done = loadPrefs()?.completedAt;
-    router.push(mode === "signin" && done ? "/dashboard" : "/onboarding");
+    setReady(true);
   }
+
+  const switchMode = (m: "signup" | "signin") => {
+    setMode(m);
+    setReady(false);
+  };
 
   return (
     <main className={styles.page}>
@@ -35,29 +44,67 @@ export default function StartForm() {
           <h1 className={styles.h1}>Your money, set up the way you think.</h1>
           <p className={styles.lead}>Two minutes of setup. Then future-you watches every account and warns you before you overspend.</p>
           <a className={styles.demoBtn} href="/onboarding?demo=1">Try the demo <span aria-hidden="true">→</span></a>
-          <p className={styles.small}>Uses a sample customer. Nothing to type.</p>
+          <p className={styles.small}>Uses a sample customer. No account needed.</p>
         </section>
 
         <section className={styles.card} aria-labelledby="auth-title">
           <div className={styles.switch} role="tablist" aria-label="Account">
-            <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? styles.switchOn : undefined} onClick={() => setMode("signup")}>Create account</button>
-            <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? styles.switchOn : undefined} onClick={() => setMode("signin")}>Sign in</button>
+            <button type="button" role="tab" aria-selected={mode === "signup"} className={mode === "signup" ? styles.switchOn : undefined} onClick={() => switchMode("signup")}>Create account</button>
+            <button type="button" role="tab" aria-selected={mode === "signin"} className={mode === "signin" ? styles.switchOn : undefined} onClick={() => switchMode("signin")}>Sign in</button>
           </div>
           <h2 id="auth-title" className={styles.cardTitle}>{mode === "signup" ? "Create your account" : "Welcome back"}</h2>
-          <form onSubmit={submit} className={styles.form}>
-            {mode === "signup" && (
-              <label className={styles.field}>First name
-                <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="given-name" required />
-              </label>
-            )}
-            <label className={styles.field}>Email
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required />
-            </label>
-            <label className={styles.field}>Password
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={8} required />
-            </label>
-            <button className={styles.primaryBtn}>{mode === "signup" ? "Create account" : "Sign in"}</button>
-          </form>
+          {problem && <p className={styles.authError} role="alert">{problem}</p>}
+
+          {configured && mode === "signin" && (
+            <div className={styles.clerkBox}>
+              <SignIn routing="hash" forceRedirectUrl="/start/finish" signUpUrl="/start" />
+            </div>
+          )}
+
+          {configured && mode === "signup" && !ready && (
+            <form onSubmit={next} className={styles.form}>
+              <div className={styles.typePick} role="radiogroup" aria-label="Account type">
+                {(["individual", "company"] as const).map((t) => (
+                  <button key={t} type="button" role="radio" aria-checked={details.type === t} className={details.type === t ? styles.typeOn : undefined} onClick={() => set("type", t)}>
+                    {t === "individual" ? "Individual" : "Company"}
+                  </button>
+                ))}
+              </div>
+              {details.type === "individual" ? (
+                <div className={styles.nameRow}>
+                  <label className={styles.field}>First name
+                    <input value={details.firstName} onChange={(e) => set("firstName", e.target.value)} autoComplete="given-name" maxLength={80} required />
+                  </label>
+                  <label className={styles.field}>Last name
+                    <input value={details.lastName} onChange={(e) => set("lastName", e.target.value)} autoComplete="family-name" maxLength={80} required />
+                  </label>
+                </div>
+              ) : (
+                <label className={styles.field}>Company name
+                  <input value={details.companyName} onChange={(e) => set("companyName", e.target.value)} autoComplete="organization" maxLength={80} required />
+                </label>
+              )}
+              <button className={styles.primaryBtn}>Continue</button>
+              <p className={styles.small}>Next you&rsquo;ll add your email and a password.</p>
+            </form>
+          )}
+
+          {configured && mode === "signup" && ready && (
+            <>
+              <p className={styles.small}>
+                {details.type === "company" ? details.companyName : `${details.firstName} ${details.lastName}`} ·{" "}
+                <button type="button" className={styles.linkBtn} onClick={() => setReady(false)}>Change</button>
+              </p>
+              <div className={styles.clerkBox}>
+                <SignUp
+                  routing="hash"
+                  forceRedirectUrl="/start/finish"
+                  signInUrl="/start?mode=signin"
+                  unsafeMetadata={details.type === "company" ? { type: "company", companyName: details.companyName.trim() } : { type: "individual", firstName: details.firstName.trim(), lastName: details.lastName.trim() }}
+                />
+              </div>
+            </>
+          )}
           <p className={styles.small}>Prototype with synthetic data only. Not financial advice.</p>
         </section>
       </div>

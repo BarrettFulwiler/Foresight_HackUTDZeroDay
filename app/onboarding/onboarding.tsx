@@ -5,40 +5,94 @@ import { BRAND } from "../../lib/brand";
 import { categoryMeta, longMonth, money, shortMonth } from "../../lib/format";
 import { DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, monthsUntil, savePrefs } from "../../lib/prefs";
 import type { Summary } from "../../lib/summary";
+import { markDemo } from "../../lib/auth-client";
+import DatePicker, { formatDate } from "./date-picker";
 import styles from "./onboarding.module.css";
 
 const STEPS = ["Who it's for", "Location", "Your view", "Goals", "Consent"];
-const STATES = [
-  ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"], ["CA", "California"], ["CO", "Colorado"], ["CT", "Connecticut"],
-  ["DE", "Delaware"], ["DC", "District of Columbia"], ["FL", "Florida"], ["GA", "Georgia"], ["HI", "Hawaii"], ["ID", "Idaho"], ["IL", "Illinois"],
-  ["IN", "Indiana"], ["IA", "Iowa"], ["KS", "Kansas"], ["KY", "Kentucky"], ["LA", "Louisiana"], ["ME", "Maine"], ["MD", "Maryland"],
-  ["MA", "Massachusetts"], ["MI", "Michigan"], ["MN", "Minnesota"], ["MS", "Mississippi"], ["MO", "Missouri"], ["MT", "Montana"], ["NE", "Nebraska"],
-  ["NV", "Nevada"], ["NH", "New Hampshire"], ["NJ", "New Jersey"], ["NM", "New Mexico"], ["NY", "New York"], ["NC", "North Carolina"],
-  ["ND", "North Dakota"], ["OH", "Ohio"], ["OK", "Oklahoma"], ["OR", "Oregon"], ["PA", "Pennsylvania"], ["RI", "Rhode Island"],
-  ["SC", "South Carolina"], ["SD", "South Dakota"], ["TN", "Tennessee"], ["TX", "Texas"], ["UT", "Utah"], ["VT", "Vermont"], ["VA", "Virginia"],
-  ["WA", "Washington"], ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
-];
+// Regions per country, as [code, name]. The label above the list changes with the country.
+const REGIONS: Record<string, { label: string; list: [string, string][] }> = {
+  US: {
+    label: "State",
+    list: [
+      ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"], ["CA", "California"], ["CO", "Colorado"], ["CT", "Connecticut"],
+      ["DE", "Delaware"], ["DC", "District of Columbia"], ["FL", "Florida"], ["GA", "Georgia"], ["HI", "Hawaii"], ["ID", "Idaho"], ["IL", "Illinois"],
+      ["IN", "Indiana"], ["IA", "Iowa"], ["KS", "Kansas"], ["KY", "Kentucky"], ["LA", "Louisiana"], ["ME", "Maine"], ["MD", "Maryland"],
+      ["MA", "Massachusetts"], ["MI", "Michigan"], ["MN", "Minnesota"], ["MS", "Mississippi"], ["MO", "Missouri"], ["MT", "Montana"], ["NE", "Nebraska"],
+      ["NV", "Nevada"], ["NH", "New Hampshire"], ["NJ", "New Jersey"], ["NM", "New Mexico"], ["NY", "New York"], ["NC", "North Carolina"],
+      ["ND", "North Dakota"], ["OH", "Ohio"], ["OK", "Oklahoma"], ["OR", "Oregon"], ["PA", "Pennsylvania"], ["RI", "Rhode Island"],
+      ["SC", "South Carolina"], ["SD", "South Dakota"], ["TN", "Tennessee"], ["TX", "Texas"], ["UT", "Utah"], ["VT", "Vermont"], ["VA", "Virginia"],
+      ["WA", "Washington"], ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
+    ],
+  },
+  MX: {
+    label: "State",
+    list: [
+      ["AGU", "Aguascalientes"], ["BCN", "Baja California"], ["BCS", "Baja California Sur"], ["CAM", "Campeche"], ["CHP", "Chiapas"],
+      ["CHH", "Chihuahua"], ["CMX", "Ciudad de México"], ["COA", "Coahuila"], ["COL", "Colima"], ["DUR", "Durango"], ["GUA", "Guanajuato"],
+      ["GRO", "Guerrero"], ["HID", "Hidalgo"], ["JAL", "Jalisco"], ["MEX", "Estado de México"], ["MIC", "Michoacán"], ["MOR", "Morelos"],
+      ["NAY", "Nayarit"], ["NLE", "Nuevo León"], ["OAX", "Oaxaca"], ["PUE", "Puebla"], ["QUE", "Querétaro"], ["ROO", "Quintana Roo"],
+      ["SLP", "San Luis Potosí"], ["SIN", "Sinaloa"], ["SON", "Sonora"], ["TAB", "Tabasco"], ["TAM", "Tamaulipas"], ["TLA", "Tlaxcala"],
+      ["VER", "Veracruz"], ["YUC", "Yucatán"], ["ZAC", "Zacatecas"],
+    ],
+  },
+  CA: {
+    label: "Province or territory",
+    list: [
+      ["AB", "Alberta"], ["BC", "British Columbia"], ["MB", "Manitoba"], ["NB", "New Brunswick"], ["NL", "Newfoundland and Labrador"],
+      ["NS", "Nova Scotia"], ["ON", "Ontario"], ["PE", "Prince Edward Island"], ["QC", "Quebec"], ["SK", "Saskatchewan"],
+      ["NT", "Northwest Territories"], ["NU", "Nunavut"], ["YT", "Yukon"],
+    ],
+  },
+};
+const COUNTRIES: [string, string][] = [["US", "United States"], ["MX", "Mexico"], ["CA", "Canada"]];
+const CURRENCIES: [Prefs["currency"], string][] = [["USD", "US dollar (USD)"], ["MXN", "Mexican peso (MXN)"], ["CAD", "Canadian dollar (CAD)"]];
 
-const BLANK: Prefs = {
+// Onboarding starts with nothing chosen: every choice is blank until the person picks it.
+type Draft = Omit<Prefs, "accountType" | "currency" | "view" | "units" | "period"> & {
+  accountType: Prefs["accountType"] | "";
+  currency: Prefs["currency"] | "";
+  view: Prefs["view"] | "";
+  units: Prefs["units"] | "";
+  period: Prefs["period"] | 0;
+};
+
+const BLANK: Draft = {
   ...DEMO_PREFS,
   name: "",
-  view: "detailed",
-  units: "dollars",
-  period: 3,
+  email: "",
+  accountType: "",
+  country: "",
+  state: "",
+  currency: "",
+  view: "",
+  units: "",
+  period: 0,
   goals: [],
   goal: { kind: "trip", label: "", target: 0, saved: 0, by: "" },
   consent: { pnc: false, capitalOne: false, disclaimer: false },
 };
 
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const isoDay = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000);
+const monthsAfter = (ymd: string, n: number) => {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return isoDay(new Date(y, m - 1 + n, d));
+};
+
 export default function Onboarding({ summary }: { summary: Summary }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [p, setP] = useState<Prefs>(BLANK);
+  const [p, setP] = useState<Draft>(BLANK);
+  const [today, setToday] = useState("");
+  useEffect(() => setToday(isoDay(new Date())), []);
 
   // ?demo=1 goes straight to the dashboard with the demo profile, so visitors see the forecast first
   // (they can customize later from the avatar). Otherwise start from what the sign-up form passed along.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("demo")) {
+      markDemo(); // lets the demo into the dashboard without an account
       savePrefs({ ...DEMO_PREFS, completedAt: new Date().toISOString() });
       router.replace("/dashboard?welcome=1");
       return;
@@ -49,22 +103,29 @@ export default function Onboarding({ summary }: { summary: Summary }) {
     } catch {}
   }, []);
 
-  const set = <K extends keyof Prefs>(k: K, v: Prefs[K]) => setP((cur) => ({ ...cur, [k]: v }));
+  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setP((cur) => ({ ...cur, [k]: v }));
   const setGoal = (g: Partial<Prefs["goal"]>) => setP((cur) => ({ ...cur, goal: { ...cur.goal, ...g } }));
   const setConsent = (c: Partial<Prefs["consent"]>) => setP((cur) => ({ ...cur, consent: { ...cur.consent, ...c } }));
   // Personal and business goals are different lists, so switching who it's for clears the goals picked so far.
   const setType = (accountType: Prefs["accountType"]) =>
     setP((cur) => (cur.accountType === accountType ? cur : { ...cur, accountType, goals: [], goal: BLANK.goal }));
   const business = p.accountType === "company";
-  const options = goalOptionsFor(p.accountType);
+  const options = goalOptionsFor(p.accountType || "individual");
+  const regions = REGIONS[p.country];
 
   const valid = [
-    true,
-    Boolean(p.state),
-    true,
-    p.goals.length > 0 && p.goal.target > 0 && /^\d{4}-\d{2}$/.test(p.goal.by),
+    Boolean(p.accountType),
+    Boolean(p.country && p.state && p.currency),
+    Boolean(p.view && p.units && p.period),
+    p.goals.length > 0 && p.goal.target > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.goal.by) && (!today || p.goal.by >= today),
     p.consent.pnc && p.consent.disclaimer,
   ][step];
+
+  function complete(d: Draft) {
+    // Every step had to be filled in before this button unlocks, so the draft is a full setup now.
+    const label = d.goal.label.trim() || goalOption(d.goal.kind)?.example || "";
+    finish({ ...(d as Prefs), goal: { ...d.goal, label } });
+  }
 
   function finish(prefs: Prefs) {
     savePrefs({ ...prefs, completedAt: new Date().toISOString() });
@@ -75,23 +136,30 @@ export default function Onboarding({ summary }: { summary: Summary }) {
     setP((cur) => {
       const goals = cur.goals.includes(kind) ? cur.goals.filter((g) => g !== kind) : [...cur.goals, kind];
       const example = (k: GoalKind) => goalOption(k)?.example ?? "";
-      const main = goals.includes(cur.goal.kind) ? cur.goal : { ...cur.goal, kind: goals[0] ?? kind, label: example(goals[0] ?? kind) };
-      return { ...cur, goals, goal: main.label ? main : { ...main, label: example(main.kind) } };
+      // The name stays blank (the example shows as a placeholder) until they type one.
+      const main = goals.includes(cur.goal.kind) ? cur.goal : { ...cur.goal, kind: goals[0] ?? kind, label: "" };
+      return { ...cur, goals, goal: main };
     });
   }
 
-  const nextMonth = useMemo(() => {
-    const [y, m] = summary.asOf.split("-").map(Number);
-    return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
-  }, [summary.asOf]);
-  const monthsLeft = p.goal.by ? monthsUntil(summary.asOf, p.goal.by) : 0;
-  const perMonth = monthsLeft ? Math.max(0, p.goal.target - p.goal.saved) / monthsLeft : 0;
+  // Goal math runs from today's date. Less than a month away: a daily amount; otherwise monthly.
+  const hasBy = /^\d{4}-\d{2}-\d{2}$/.test(p.goal.by) && Boolean(today);
+  const left = Math.max(0, p.goal.target - p.goal.saved);
+  const underMonth = hasBy && p.goal.by < monthsAfter(today, 1);
+  const daysLeft = hasBy ? Math.max(1, daysBetween(today, p.goal.by)) : 0;
+  const monthsLeft = hasBy ? monthsUntil(today, p.goal.by) : 0;
+  const perMonth = monthsLeft ? left / monthsLeft : 0;
+  const perDay = daysLeft ? left / daysLeft : 0;
+  const enough = p.goal.target > 0 && p.goal.saved >= p.goal.target;
 
   return (
     <main className={styles.page}>
       <header className={styles.top}>
         <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
-        <button type="button" className={styles.skip} onClick={() => finish({ ...DEMO_PREFS, name: p.name || DEMO_PREFS.name })}>Skip, use demo profile</button>
+        <button type="button" className={styles.skip} onClick={() => {
+          markDemo();
+          finish({ ...DEMO_PREFS, name: p.name || DEMO_PREFS.name });
+        }}>Skip, use demo profile</button>
       </header>
 
       <div className={styles.flow}>
@@ -120,21 +188,24 @@ export default function Onboarding({ summary }: { summary: Summary }) {
               <p className={styles.stepSub}>Used to show amounts in your currency and your local context.</p>
               <div className={styles.form}>
                 <label className={styles.field}>Country
-                  <select value={p.country} onChange={(e) => set("country", e.target.value)}>
-                    <option value="US">United States</option>
-                    <option value="CA" disabled>Canada (coming soon)</option>
-                    <option value="MX" disabled>Mexico (coming soon)</option>
+                  {/* Changing the country clears the region, since each country has its own list. */}
+                  <select value={p.country} onChange={(e) => setP((cur) => ({ ...cur, country: e.target.value, state: "" }))}>
+                    <option value="" disabled>Choose your country</option>
+                    {COUNTRIES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
                   </select>
                 </label>
-                <label className={styles.field}>State
-                  <select value={p.state} onChange={(e) => set("state", e.target.value)}>
-                    <option value="">Choose your state</option>
-                    {STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                <label className={styles.field}>{regions?.label ?? "State or province"}
+                  <select value={p.state} onChange={(e) => set("state", e.target.value)} disabled={!regions}>
+                    <option value="" disabled>{regions ? `Choose your ${regions.label.toLowerCase()}` : "Choose a country first"}</option>
+                    {regions?.list.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
                   </select>
                 </label>
                 <label className={styles.field}>Currency
-                  <select value="USD" disabled><option value="USD">US dollar (USD)</option></select>
-                  <small>All of your linked accounts are in US dollars.</small>
+                  <select value={p.currency} onChange={(e) => set("currency", e.target.value as Prefs["currency"])}>
+                    <option value="" disabled>Choose your currency</option>
+                    {CURRENCIES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                  </select>
+                  <small>Your linked accounts are in US dollars, so amounts still show in USD for now.</small>
                 </label>
               </div>
             </>
@@ -185,7 +256,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
                       </select>
                     </label>
                     <label className={styles.field}>Name it
-                      <input value={p.goal.label} onChange={(e) => setGoal({ label: e.target.value })} placeholder={business ? "3-month operating reserve" : "Trip to Cancún"} />
+                      <input value={p.goal.label} onChange={(e) => setGoal({ label: e.target.value })} placeholder={goalOption(p.goal.kind)?.example ?? ""} />
                     </label>
                     <label className={styles.field}>Target ($)
                       <input inputMode="numeric" value={p.goal.target || ""} onChange={(e) => setGoal({ target: Number(e.target.value.replace(/\D/g, "")) })} placeholder={business ? "150000" : "1500"} />
@@ -193,15 +264,23 @@ export default function Onboarding({ summary }: { summary: Summary }) {
                     <label className={styles.field}>{business ? "Set aside so far ($)" : "Saved so far ($)"}
                       <input inputMode="numeric" value={p.goal.saved || ""} onChange={(e) => setGoal({ saved: Number(e.target.value.replace(/\D/g, "")) })} placeholder="0" />
                     </label>
-                    <label className={styles.field}>By
-                      <input type="month" min={nextMonth} value={p.goal.by} onChange={(e) => setGoal({ by: e.target.value })} />
-                    </label>
+                    <div className={styles.field}>
+                      <span id="goal-by-label">By</span>
+                      <DatePicker labelledBy="goal-by-label" min={today || isoDay(new Date())} value={p.goal.by.length === 10 ? p.goal.by : ""} onChange={(by) => setGoal({ by })} />
+                    </div>
                   </div>
-                  {p.goal.target > 0 && p.goal.by && (
+                  {enough ? (
+                    <p className={styles.goalMath}>You already have enough money saved 😊</p>
+                  ) : p.goal.target > 0 && hasBy ? (
                     <p className={styles.goalMath}>
-                      That&rsquo;s <strong>{money(perMonth, false)} a month</strong> for {monthsLeft} month{monthsLeft === 1 ? "" : "s"} to reach {money(p.goal.target, false)} by {longMonth(p.goal.by)}.
+                      {underMonth ? (
+                        <>That&rsquo;s <strong>{money(perDay, false)} a day</strong> for {daysLeft} day{daysLeft === 1 ? "" : "s"}</>
+                      ) : (
+                        <>That&rsquo;s <strong>{money(perMonth, false)} a month</strong> for {monthsLeft} month{monthsLeft === 1 ? "" : "s"}</>
+                      )}{" "}
+                      to reach {money(p.goal.target, false)} by {formatDate(p.goal.by)}.
                     </p>
-                  )}
+                  ) : null}
                 </div>
               )}
             </>
@@ -233,7 +312,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
             {step < STEPS.length - 1 ? (
               <button type="button" className={styles.primaryBtn} disabled={!valid} onClick={() => setStep(step + 1)}>Continue</button>
             ) : (
-              <button type="button" className={styles.primaryBtn} disabled={!valid} onClick={() => finish(p)}>Finish setup</button>
+              <button type="button" className={styles.primaryBtn} disabled={!valid} onClick={() => complete(p)}>Finish setup</button>
             )}
           </div>
         </section>
@@ -278,7 +357,9 @@ function Consent({ checked, required, title, text, onChange }: { checked: boolea
 }
 
 // Live mini-dashboard: changes as the user picks options in step 3.
-function Preview({ p, summary }: { p: Prefs; summary: Summary }) {
+// Until a choice is made, it previews the detailed, dollars, 3-month view.
+function Preview({ p: draft, summary }: { p: Draft; summary: Summary }) {
+  const p = { view: draft.view || "detailed", units: draft.units || "dollars", period: draft.period || 3 };
   const months = summary.recent.slice(-p.period);
   const totals: Record<string, number> = {};
   for (const m of months) for (const [k, v] of Object.entries(m.byCategory)) totals[k] = (totals[k] ?? 0) + v;

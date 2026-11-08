@@ -1,0 +1,136 @@
+/* Pop-up date picker (see date-picker.tsx). Matches the onboarding fields. */
+.wrap {
+  position: relative;
+}
+
+.trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #e7eaf3);
+  background: #f8f9fd;
+  color: var(--ink, #0e1726);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.trigger:hover,
+.trigger[aria-expanded="true"] {
+  border-color: var(--accent, #3b5bfd);
+}
+.trigger svg {
+  flex: none;
+  color: var(--accent, #3b5bfd);
+}
+.empty span {
+  color: var(--muted, #667085);
+}
+
+.pop {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line, #e7eaf3);
+  background: #fff;
+  box-shadow: 0 18px 44px #1b2a5a2b;
+}
+
+.head {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1.3fr) minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.head select {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line, #e7eaf3);
+  background: #f8f9fd;
+  color: var(--ink, #0e1726);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+}
+.nav {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink, #0e1726);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nav:hover:not(:disabled) {
+  background: #eef1fa;
+}
+.nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.week,
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.week span {
+  padding: 4px 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted, #667085);
+}
+
+.day {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink, #0e1726);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.day:hover:not(:disabled) {
+  background: #eef1fa;
+}
+.day:focus-visible {
+  outline: 2px solid var(--accent, #3b5bfd);
+  outline-offset: 1px;
+}
+.day:disabled {
+  color: #c3c8d4;
+  cursor: default;
+}
+.day.selected,
+.day.selected:hover {
+  background: var(--accent, #3b5bfd);
+  color: #fff;
+}
+
+.hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted, #667085);
+  text-align: center;
+}

@@ -2,7 +2,7 @@
 // Every number comes from the forecast engine; nothing is guessed.
 import type { Account, ScheduleEvent } from "./finance";
 import { runForecast, type ExtraEvent, type Forecast, type Scenario } from "./forecast";
-import { longMonth, money } from "./format";
+import { goalDay, longMonth, money } from "./format";
 import { addDays, low, shortDay, type BusinessPresetId, type Plan } from "./plans";
 import type { Prefs } from "./prefs";
 
@@ -77,7 +77,7 @@ export function buildBusinessPlan(id: BusinessPresetId, accounts: Account[], sch
     const amount = goal?.kind === "equipment" && goal.target > 0 ? goal.target : Math.max(10_000, roundTo(liquid * 0.1, 5000));
     const ym = goal?.kind === "equipment" && goal.by ? goal.by : nextMonth(asOf, 1);
     const label = goal?.kind === "equipment" && goal.label ? goal.label : "Equipment";
-    const date = `${ym}-10`;
+    const date = goalDay(ym);
     const buy: ExtraEvent[] = [{ date, accountId: checking.id, delta: -amount, label }];
     const asIs = run({ extra: buy });
     // Move only what keeps the operating account above the cushion from the purchase on (often nothing).

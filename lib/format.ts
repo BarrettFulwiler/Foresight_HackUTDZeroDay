@@ -7,6 +7,8 @@ export const money = (n: number, cents = true) =>
 
 export const shortMonth = (ym: string) => `${MONTHS[Number(ym.slice(5, 7)) - 1]} '${ym.slice(2, 4)}`;
 export const longMonth = (ym: string) => `${LONG[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
+/** A goal's day (YYYY-MM-DD). Goals picked with the date picker store the exact day; older ones stored only the month, so assume the 10th. */
+export const goalDay = (by: string) => (/^\d{4}-\d{2}-\d{2}$/.test(by) ? by : `${by.slice(0, 7)}-10`);
 
 type Meta = { label: string; color: string; about: string };
 export const CATEGORY_META: Record<string, Meta> = {

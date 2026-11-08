@@ -9,9 +9,8 @@ import { buildCustomPlan, horizonMonths } from "../lib/whatif";
 import { AskCard, FuturesCard } from "./landing-futures";
 
 // Opens the dashboard straight away with the demo profile (see app/onboarding).
-const DEMO_HREF = "/onboarding?demo=1";
 // The demo profile's goal (same as DEMO_PREFS in lib/prefs.ts), so the landing matches the demo.
-const DEMO_GOAL: Prefs["goal"] = { kind: "trip", label: "Trip to Cancún", target: 1500, saved: 960, by: "2027-03" };
+const DEMO_GOAL: Prefs["goal"] = { kind: "trip", label: "Trip to Cancún", target: 1500, saved: 960, by: "2027-03-10" };
 const ASK_EXAMPLE = "Can I afford a $3,000 car repair next month?";
 
 export const metadata: Metadata = {
@@ -75,7 +74,7 @@ export default async function Landing() {
         <nav className={styles.navLinks} aria-label="Main">
           <a href="#how">How it works</a>
           <a href="/dashboard">Dashboard</a>
-          <a className={styles.navCta} href={DEMO_HREF}>Try the demo</a>
+          <a className={styles.navCta} href="/onboarding">Sign in</a>
         </nav>
       </header>
 
@@ -88,12 +87,10 @@ export default async function Landing() {
             what-if, and you get a plan you approve before any money moves.
           </p>
           <div className={styles.ctas}>
-            <a className={styles.primary} href={DEMO_HREF}>Try the demo</a>
             <a className={styles.secondary} href="#how">How it works</a>
           </div>
           <p className={styles.micro}>
-            The demo opens straight to the dashboard, using PNC&rsquo;s synthetic customer data and Capital One&rsquo;s Nessie
-            sandbox. No real accounts or money.
+            Built on PNC&rsquo;s synthetic customer data and Capital One&rsquo;s Nessie sandbox. No real accounts or money.
           </p>
           <ul className={styles.proof}>
             <li><strong>Day by day</strong><span>Every account projected 12 months ahead</span></li>
@@ -102,7 +99,7 @@ export default async function Landing() {
           </ul>
         </div>
         <div className={styles.heroArt}>
-          <FuturesCard plan={plan} tripDate={`${DEMO_GOAL.by}-10`} tripTarget={DEMO_GOAL.target} />
+          <FuturesCard plan={plan} tripDate={DEMO_GOAL.by} tripTarget={DEMO_GOAL.target} />
         </div>
       </section>
 
@@ -170,10 +167,9 @@ export default async function Landing() {
 
       <section className={`${styles.wrap} ${styles.tryIt}`} aria-labelledby="try-title">
         <h2 id="try-title" className={styles.h2}>See where your money is headed.</h2>
-        <p className={styles.body}>The demo opens on the forecast. Set up your own view afterward if you like.</p>
+        <p className={styles.body}>Set up your own view in a couple of minutes.</p>
         <div className={styles.ctas}>
-          <a className={styles.primary} href={DEMO_HREF}>Try the demo</a>
-          <a className={styles.secondary} href="/onboarding">Set up your own view</a>
+          <a className={styles.primary} href="/onboarding">Set up your own view</a>
         </div>
       </section>
 

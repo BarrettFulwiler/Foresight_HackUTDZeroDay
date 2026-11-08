@@ -2,7 +2,7 @@
 // Every sentence is filled in from calculated values; nothing here is guessed by an AI.
 import type { Account, ScheduleEvent } from "./finance";
 import { payoffEffect, runForecast, type Forecast, type Scenario } from "./forecast";
-import { longMonth, money, shortMonth } from "./format";
+import { goalDay, longMonth, money, shortMonth } from "./format";
 import type { Prefs } from "./prefs";
 
 export type PresetId = "trip" | "payoff" | "emergency";
@@ -83,7 +83,8 @@ export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleE
     const target = goal && goal.target > 0 ? goal.target : 1500;
     const by = goal?.by || "2027-03";
     const label = goal?.label || "Trip";
-    const tripDate = `${by}-10`;
+    const tripDate = goalDay(by);
+    const moveDate = addDays(tripDate, -1);
     const trip: Scenario = { extra: [{ date: tripDate, accountId: checking.id, delta: -target, label }] };
     const asIs = run(trip);
     const bridge = bridgeFor(asIs);
@@ -91,7 +92,7 @@ export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleE
       ...trip,
       moves: [
         ...(bridge && cofSavings ? [{ date: tomorrow, fromId: cofSavings.id, toId: checking.id, amount: bridge, label: "Bridge to checking" }] : []),
-        { date: `${by}-09`, fromId: pncSavings.id, toId: checking.id, amount: target, label: "Move trip money from savings" },
+        { date: moveDate, fromId: pncSavings.id, toId: checking.id, amount: target, label: "Move trip money from savings" },
       ],
       cuts: { dining: 75, shopping: 75 },
       shield,
@@ -109,7 +110,7 @@ export function buildPlan(id: PresetId, accounts: Account[], schedule: ScheduleE
       steps: [
         ...(bridge ? [`Move ${r(bridge)} from Capital One Savings to PNC Checking now, to get past the next two months of bills.`] : []),
         "Trim dining and shopping by $75 each a month ($150 a month).",
-        `On ${shortDay(`${by}-09`)}, move the trip's ${r(target)} from PNC Savings into checking.`,
+        `On ${shortDay(moveDate)}, move the trip's ${r(target)} from PNC Savings into checking.`,
         `Turn on automatic top-ups: PNC Savings refills checking whenever it would drop below ${r(FLOOR)}.`,
       ],
       outcome: [
