@@ -10,7 +10,8 @@ export const metadata: Metadata = {
 
 export default function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <ClerkProvider>
+    // telemetry off: Clerk's usage telemetry isn't needed, and the security policy doesn't allow its host.
+    <ClerkProvider telemetry={false}>
       <html lang="en"><body>{children}</body></html>
     </ClerkProvider>
   );
