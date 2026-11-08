@@ -38,7 +38,7 @@ export default function StartForm({ initialMode, error, configured }: { initialM
           <p className={styles.eyebrow}>{SLOGAN}</p>
           <h1 className={styles.h1}>Your money, set up the way you think.</h1>
           <p className={styles.lead}>Two minutes of setup. Then future-you watches every account and warns you before you overspend.</p>
-          <a className={styles.demoBtn} href="/onboarding?demo=1">Try the demo <span aria-hidden="true">→</span></a>
+          <a className={styles.demoBtn} href="/onboarding?demo=1">Skip to the demo <span aria-hidden="true">→</span></a>
           <p className={styles.small}>Uses a sample customer. No account needed.</p>
         </section>
 
