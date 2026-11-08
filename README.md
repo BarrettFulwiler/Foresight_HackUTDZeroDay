@@ -9,7 +9,7 @@
 | `/` | Landing page |
 | `/start` | Create account / sign in, plus **Try the demo** |
 | `/onboarding` | 5-step setup: who it's for, location, how you see your money (with a live preview), goals, consent |
-| `/dashboard` | **View**: cash headline (dollars or days), goal card, spending donut (click a slice for details), savings chart, budgeting, account cards. **Move**, **Edit**, **Advising** tabs |
+| `/dashboard` | **View**: cash headline (dollars or days), goal card, spending donut (click a slice for details), account history chart, health cards, budgeting, account cards. **Move**, **Edit**, **Advising** tabs |
 
 Onboarding choices change the dashboard: simple or detailed layout, cash in dollars or "days it lasts", and a 1- or 3-month spending view.
 
