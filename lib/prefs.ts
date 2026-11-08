@@ -6,7 +6,7 @@ export type GoalKind = "emergency" | "card" | "trip" | "car" | "retire";
 export type Prefs = {
   name: string;
   email: string;
-  accountType: "individual";
+  accountType: "individual" | "company";
   country: string;
   state: string;
   currency: "USD";

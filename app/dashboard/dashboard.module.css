@@ -2073,6 +2073,25 @@
   text-align: center;
 }
 
+/* Individual / Company switch in the header */
+.modeSwitch {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: #f1f3f9;
+}
+.modeSwitch a {
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--muted);
+  text-decoration: none;
+}
+.modeSwitch a[aria-current="page"] {
+  background: var(--panel);
+  color: var(--accent);
+  box-shadow: 0 2px 8px #1b2a5a1a;
 /* ---------- Ask future-you: free-text what-if chat (from the what-if chat feature) ---------- */
 .chatBox {
   margin-top: 18px;
