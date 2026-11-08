@@ -1,24 +1,4 @@
 /* Company view. Shell, panels and tokens come from ../dashboard.module.css. */
-.mode {
-  display: inline-flex;
-  padding: 3px;
-  border-radius: 999px;
-  background: #f1f3f9;
-}
-.mode a {
-  padding: 7px 16px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 650;
-  color: #667085;
-  text-decoration: none;
-}
-.mode a[aria-current="page"] {
-  background: #fff;
-  color: #3b5bfd;
-  box-shadow: 0 2px 8px #1b2a5a1a;
-}
-
 .hero {
   display: flex;
   justify-content: space-between;

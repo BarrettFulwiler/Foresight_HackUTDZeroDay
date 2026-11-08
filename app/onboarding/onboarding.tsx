@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "../../lib/brand";
 import { categoryMeta, longMonth, money, shortMonth } from "../../lib/format";
-import { DEMO_PREFS, GOAL_OPTIONS, type GoalKind, type Prefs, monthsUntil, savePrefs } from "../../lib/prefs";
+import { DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, monthsUntil, savePrefs } from "../../lib/prefs";
 import type { Summary } from "../../lib/summary";
 import styles from "./onboarding.module.css";
 
@@ -52,6 +52,11 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   const set = <K extends keyof Prefs>(k: K, v: Prefs[K]) => setP((cur) => ({ ...cur, [k]: v }));
   const setGoal = (g: Partial<Prefs["goal"]>) => setP((cur) => ({ ...cur, goal: { ...cur.goal, ...g } }));
   const setConsent = (c: Partial<Prefs["consent"]>) => setP((cur) => ({ ...cur, consent: { ...cur.consent, ...c } }));
+  // Personal and business goals are different lists, so switching who it's for clears the goals picked so far.
+  const setType = (accountType: Prefs["accountType"]) =>
+    setP((cur) => (cur.accountType === accountType ? cur : { ...cur, accountType, goals: [], goal: BLANK.goal }));
+  const business = p.accountType === "company";
+  const options = goalOptionsFor(p.accountType);
 
   const valid = [
     true,
@@ -69,7 +74,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   function toggleGoal(kind: GoalKind) {
     setP((cur) => {
       const goals = cur.goals.includes(kind) ? cur.goals.filter((g) => g !== kind) : [...cur.goals, kind];
-      const example = (k: GoalKind) => GOAL_OPTIONS.find((o) => o.kind === k)?.example ?? "";
+      const example = (k: GoalKind) => goalOption(k)?.example ?? "";
       const main = goals.includes(cur.goal.kind) ? cur.goal : { ...cur.goal, kind: goals[0] ?? kind, label: example(goals[0] ?? kind) };
       return { ...cur, goals, goal: main.label ? main : { ...main, label: example(main.kind) } };
     });
@@ -103,8 +108,8 @@ export default function Onboarding({ summary }: { summary: Summary }) {
               <h1 className={styles.stepTitle}>{p.name ? `Hi ${p.name}! ` : ""}Who is this for?</h1>
               <p className={styles.stepSub}>We&rsquo;ll tailor what you see to how you use money.</p>
               <div className={styles.choices} role="radiogroup" aria-label="Account type">
-                <Choice checked={p.accountType === "individual"} title="Just me" text="My own accounts, bills and goals." onSelect={() => set("accountType", "individual")} />
-                <Choice checked={p.accountType === "company"} title="My company" text="Business accounts, loans and cash on hand." onSelect={() => set("accountType", "company")} />
+                <Choice checked={p.accountType === "individual"} title="Just me" text="My own accounts, bills and goals." onSelect={() => setType("individual")} />
+                <Choice checked={p.accountType === "company"} title="My company" text="Business accounts, loans and cash on hand." onSelect={() => setType("company")} />
               </div>
             </>
           )}
@@ -159,10 +164,12 @@ export default function Onboarding({ summary }: { summary: Summary }) {
 
           {step === 3 && (
             <>
-              <h1 className={styles.stepTitle}>What are you working toward?</h1>
-              <p className={styles.stepSub}>Pick any that apply. Future-you keeps an eye on these.</p>
-              <div className={styles.chips} role="group" aria-label="Goals">
-                {GOAL_OPTIONS.map((g) => (
+              <h1 className={styles.stepTitle}>{business ? "What is the business working toward?" : "What are you working toward?"}</h1>
+              <p className={styles.stepSub}>
+                {business ? "Pick any that apply. Future-you watches the company's cash flow against these." : "Pick any that apply. Future-you keeps an eye on these."}
+              </p>
+              <div className={styles.chips} role="group" aria-label={business ? "Business goals" : "Goals"}>
+                {options.map((g) => (
                   <button key={g.kind} type="button" aria-pressed={p.goals.includes(g.kind)} className={p.goals.includes(g.kind) ? styles.chipOn : styles.chip} onClick={() => toggleGoal(g.kind)}>
                     {g.label}
                   </button>
@@ -170,20 +177,20 @@ export default function Onboarding({ summary }: { summary: Summary }) {
               </div>
               {p.goals.length > 0 && (
                 <div className={styles.goalBox}>
-                  <p className={styles.groupLabel}>Your main goal</p>
+                  <p className={styles.groupLabel}>{business ? "The company's main goal" : "Your main goal"}</p>
                   <div className={styles.goalGrid}>
                     <label className={styles.field}>Goal
-                      <select value={p.goal.kind} onChange={(e) => { const kind = e.target.value as GoalKind; setGoal({ kind, label: GOAL_OPTIONS.find((o) => o.kind === kind)?.example ?? "" }); }}>
-                        {p.goals.map((k) => <option key={k} value={k}>{GOAL_OPTIONS.find((o) => o.kind === k)?.label}</option>)}
+                      <select value={p.goal.kind} onChange={(e) => { const kind = e.target.value as GoalKind; setGoal({ kind, label: goalOption(kind)?.example ?? "" }); }}>
+                        {p.goals.map((k) => <option key={k} value={k}>{goalOption(k)?.label}</option>)}
                       </select>
                     </label>
                     <label className={styles.field}>Name it
-                      <input value={p.goal.label} onChange={(e) => setGoal({ label: e.target.value })} placeholder="Trip to Cancún" />
+                      <input value={p.goal.label} onChange={(e) => setGoal({ label: e.target.value })} placeholder={business ? "3-month operating reserve" : "Trip to Cancún"} />
                     </label>
                     <label className={styles.field}>Target ($)
-                      <input inputMode="numeric" value={p.goal.target || ""} onChange={(e) => setGoal({ target: Number(e.target.value.replace(/\D/g, "")) })} placeholder="1500" />
+                      <input inputMode="numeric" value={p.goal.target || ""} onChange={(e) => setGoal({ target: Number(e.target.value.replace(/\D/g, "")) })} placeholder={business ? "150000" : "1500"} />
                     </label>
-                    <label className={styles.field}>Saved so far ($)
+                    <label className={styles.field}>{business ? "Set aside so far ($)" : "Saved so far ($)"}
                       <input inputMode="numeric" value={p.goal.saved || ""} onChange={(e) => setGoal({ saved: Number(e.target.value.replace(/\D/g, "")) })} placeholder="0" />
                     </label>
                     <label className={styles.field}>By
@@ -205,8 +212,17 @@ export default function Onboarding({ summary }: { summary: Summary }) {
               <h1 className={styles.stepTitle}>You&rsquo;re in control</h1>
               <p className={styles.stepSub}>Choose what {BRAND} can do. You can change these anytime.</p>
               <div className={styles.consents}>
-                <Consent checked={p.consent.pnc} required title="Connect my PNC accounts" text="Read-only access to balances and transactions, so we can build your full picture." onChange={(v) => setConsent({ pnc: v })} />
-                <Consent checked={p.consent.capitalOne} title="Connect my Capital One accounts" text="Through Capital One's Nessie API, so you can see and move money across both banks." onChange={(v) => setConsent({ capitalOne: v })} />
+                {business ? (
+                  <>
+                    <Consent checked={p.consent.pnc} required title="Connect the company's PNC business accounts" text="Read-only access to business balances, loans and transactions, so we can build the company's full picture. I'm authorized to share them." onChange={(v) => setConsent({ pnc: v })} />
+                    <Consent checked={p.consent.capitalOne} title="Connect the company's Capital One business accounts" text="Through Capital One's Nessie API, so you can see and move the company's money across both banks." onChange={(v) => setConsent({ capitalOne: v })} />
+                  </>
+                ) : (
+                  <>
+                    <Consent checked={p.consent.pnc} required title="Connect my PNC accounts" text="Read-only access to balances and transactions, so we can build your full picture." onChange={(v) => setConsent({ pnc: v })} />
+                    <Consent checked={p.consent.capitalOne} title="Connect my Capital One accounts" text="Through Capital One's Nessie API, so you can see and move money across both banks." onChange={(v) => setConsent({ capitalOne: v })} />
+                  </>
+                )}
                 <Consent checked={p.consent.disclaimer} required title="I understand this is a prototype" text="It uses synthetic data, and nothing here is financial advice. Every number is calculated by code before AI explains it." onChange={(v) => setConsent({ disclaimer: v })} />
               </div>
             </>

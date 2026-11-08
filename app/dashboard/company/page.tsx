@@ -17,10 +17,6 @@ export default async function CompanyPage() {
     <main className={base.page}>
       <header className={base.top}>
         <a className={base.brand} href="/"><span className={base.mark} aria-hidden="true" />{BRAND}</a>
-        <nav className={styles.mode} aria-label="Account type">
-          <a href="/dashboard">Individual</a>
-          <a href="/dashboard/company" aria-current="page">Company</a>
-        </nav>
       </header>
       <div className={base.body}>
         {"company" in result ? <Overview c={result.company} /> : (

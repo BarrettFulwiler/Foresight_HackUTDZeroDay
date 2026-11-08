@@ -2,7 +2,9 @@
 import { useEffect, useState } from "react";
 
 // What the user chose during onboarding. Stored in this browser for now.
-export type GoalKind = "emergency" | "card" | "trip" | "car" | "retire";
+export type PersonalGoalKind = "emergency" | "card" | "trip" | "car" | "retire";
+export type BusinessGoalKind = "reserve" | "payroll" | "paydown" | "equipment" | "expand" | "taxes";
+export type GoalKind = PersonalGoalKind | BusinessGoalKind;
 export type Prefs = {
   name: string;
   email: string;
@@ -19,13 +21,28 @@ export type Prefs = {
   completedAt: string;
 };
 
-export const GOAL_OPTIONS: { kind: GoalKind; label: string; example: string }[] = [
+type GoalOption = { kind: GoalKind; label: string; example: string };
+
+export const GOAL_OPTIONS: GoalOption[] = [
   { kind: "trip", label: "Take a trip", example: "Trip to Cancún" },
   { kind: "emergency", label: "Build an emergency fund", example: "Emergency fund" },
   { kind: "card", label: "Pay off my credit card", example: "Credit card payoff" },
   { kind: "car", label: "Buy or replace a car", example: "Next car" },
   { kind: "retire", label: "Save for retirement", example: "Retirement" },
 ];
+
+// Goals offered in onboarding when the account is for a company.
+export const BUSINESS_GOAL_OPTIONS: GoalOption[] = [
+  { kind: "reserve", label: "Build a cash reserve", example: "3-month operating reserve" },
+  { kind: "payroll", label: "Cover payroll in slow months", example: "Payroll cushion" },
+  { kind: "paydown", label: "Pay down a loan or line of credit", example: "Line of credit payoff" },
+  { kind: "equipment", label: "Buy equipment or vehicles", example: "New delivery truck" },
+  { kind: "expand", label: "Open a new location", example: "Second location" },
+  { kind: "taxes", label: "Set aside for taxes", example: "Quarterly tax set-aside" },
+];
+
+export const goalOptionsFor = (accountType: Prefs["accountType"]) => (accountType === "company" ? BUSINESS_GOAL_OPTIONS : GOAL_OPTIONS);
+export const goalOption = (kind: GoalKind) => [...GOAL_OPTIONS, ...BUSINESS_GOAL_OPTIONS].find((o) => o.kind === kind);
 
 export const DEMO_PREFS: Prefs = {
   name: "Alex",
