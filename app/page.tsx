@@ -39,9 +39,8 @@ const TRUST = [
 ];
 
 // Logos are the companies' own marks, used only to credit what the prototype is built on.
-// PNC's logo isn't included yet: drop it in public/brand/logos/pnc.png and add logo: "/brand/logos/pnc.png" here.
 const BUILT_WITH: { name: string; logo?: string }[] = [
-  { name: "PNC financial wellness data" },
+  { name: "PNC financial wellness data", logo: "/brand/logos/pnc.png" },
   { name: "Capital One Nessie", logo: "/brand/logos/capitalone.png" },
   { name: "Google Gemini", logo: "/brand/logos/gemini.svg" },
   { name: "Next.js", logo: "/brand/logos/nextjs.svg" },
