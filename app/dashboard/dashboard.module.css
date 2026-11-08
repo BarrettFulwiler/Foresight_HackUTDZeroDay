@@ -1978,6 +1978,67 @@
   line-height: 1.45;
 }
 
+/* Savings chart: ask Gemini for feedback. The box grows as the reply types out. */
+.gemBox {
+  margin: 10px 0 0;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--line, #e3e0d8);
+  border-radius: 16px;
+  background: #fff;
+}
+.gemForm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gemInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 0;
+}
+.page .gemInput:focus-visible { outline: 0; }
+.gemBox:focus-within {
+  border-color: #9b72cb;
+  box-shadow: 0 0 0 3px rgba(155, 114, 203, 0.18);
+}
+.gemBtn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+.gemBtn:hover:not(:disabled) { background: #f3eefb; }
+.gemBtn:disabled { opacity: 0.5; cursor: default; }
+.gemStatus, .gemError, .gemText, .gemMeta { margin: 0; font-size: 13px; line-height: 1.6; }
+.gemStatus, .gemError, .gemReply { margin: 4px -6px 0 -14px; border-top: 1px solid #e8e4f0; }
+.gemStatus { padding: 10px 8px 8px 14px; color: #6b6b76; }
+.gemError { padding: 10px 8px 8px 14px; color: #b3261e; }
+.gemReply { padding: 12px 12px 10px 14px; }
+.gemG { color: #1b8a4b; }
+.gemR { color: #c8372d; }
+.gemB { font-weight: 700; }
+.gemText { white-space: pre-wrap; color: #1d1d24; }
+.gemMeta { margin-top: 8px; font-size: 12px; color: #2e7d4f; }
+.gemCaret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: #9b72cb;
+  animation: gemBlink 0.9s steps(1) infinite;
+}
+@keyframes gemBlink { 50% { opacity: 0; } }
 /* Edit tab: budgets that feed the forecast */
 .editWas {
   display: block;

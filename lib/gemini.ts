@@ -26,7 +26,16 @@ function outputText(body: { steps?: Step[] } | null): string {
     .join("");
 }
 
-export async function generateJson<T>(opts: { system: string; input: string; schema: object; temperature?: number }): Promise<{ data: T; model: string }> {
+type Opts = { system: string; input: string; temperature?: number };
+
+export async function generateJson<T>(opts: Opts & { schema: object }): Promise<{ data: T; model: string }> {
+  const { text, model } = await run(opts, { type: "text", mime_type: "application/json", schema: opts.schema });
+  return { data: JSON.parse(text) as T, model };
+}
+
+export const generateText = (opts: Opts) => run(opts);
+
+async function run(opts: Opts, responseFormat?: object): Promise<{ text: string; model: string }> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new GeminiError("Gemini isn't set up. Add GEMINI_API_KEY to .env.local.", 503);
   let last = "";
@@ -41,7 +50,7 @@ export async function generateJson<T>(opts: { system: string; input: string; sch
           system_instruction: opts.system,
           input: opts.input,
           generation_config: { temperature: opts.temperature ?? 0.6, thinking_level: "low" },
-          response_format: { type: "text", mime_type: "application/json", schema: opts.schema },
+          ...(responseFormat ? { response_format: responseFormat } : {}),
         }),
         cache: "no-store",
         signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -56,7 +65,7 @@ export async function generateJson<T>(opts: { system: string; input: string; sch
         last = `${model}: empty reply`;
         continue;
       }
-      return { data: JSON.parse(text) as T, model };
+      return { text, model };
     } catch (e) {
       last = `${model}: ${e instanceof Error ? e.message : String(e)}`;
     }
