@@ -3,8 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "../../lib/brand";
 import { categoryMeta, longMonth, money, shortMonth } from "../../lib/format";
+import { markDemo } from "../../lib/auth-client";
 import { DEMO_PREFS, GOAL_OPTIONS, type GoalKind, type Prefs, monthsUntil, savePrefs } from "../../lib/prefs";
 import type { Summary } from "../../lib/summary";
+import DatePicker, { formatDate } from "./date-picker";
 import styles from "./onboarding.module.css";
 
 const STEPS = ["Who it's for", "Location", "Your view", "Goals", "Consent"];
@@ -38,6 +40,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   // ?demo=1 pre-fills every step; otherwise start from what the sign-up form passed along.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("demo")) {
+      markDemo(); // lets the demo into the dashboard without an account
       setP(DEMO_PREFS);
       return;
     }
@@ -55,7 +58,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
     true,
     Boolean(p.state),
     true,
-    p.goals.length > 0 && p.goal.target > 0 && /^\d{4}-\d{2}$/.test(p.goal.by),
+    p.goals.length > 0 && p.goal.target > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.goal.by),
     p.consent.pnc && p.consent.disclaimer,
   ][step];
 
@@ -84,7 +87,10 @@ export default function Onboarding({ summary }: { summary: Summary }) {
     <main className={styles.page}>
       <header className={styles.top}>
         <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
-        <button type="button" className={styles.skip} onClick={() => finish({ ...DEMO_PREFS, name: p.name || DEMO_PREFS.name })}>Skip, use demo profile</button>
+        <button type="button" className={styles.skip} onClick={() => {
+          markDemo();
+          finish({ ...DEMO_PREFS, name: p.name || DEMO_PREFS.name });
+        }}>Skip, use demo profile</button>
       </header>
 
       <div className={styles.flow}>
@@ -184,13 +190,14 @@ export default function Onboarding({ summary }: { summary: Summary }) {
                     <label className={styles.field}>Saved so far ($)
                       <input inputMode="numeric" value={p.goal.saved || ""} onChange={(e) => setGoal({ saved: Number(e.target.value.replace(/\D/g, "")) })} placeholder="0" />
                     </label>
-                    <label className={styles.field}>By
-                      <input type="month" min={nextMonth} value={p.goal.by} onChange={(e) => setGoal({ by: e.target.value })} />
-                    </label>
+                    <div className={styles.field}>
+                      <span id="goal-by-label">By</span>
+                      <DatePicker labelledBy="goal-by-label" min={`${nextMonth}-01`} value={p.goal.by.length === 10 ? p.goal.by : ""} onChange={(by) => setGoal({ by })} />
+                    </div>
                   </div>
                   {p.goal.target > 0 && p.goal.by && (
                     <p className={styles.goalMath}>
-                      That&rsquo;s <strong>{money(perMonth, false)} a month</strong> for {monthsLeft} month{monthsLeft === 1 ? "" : "s"} to reach {money(p.goal.target, false)} by {longMonth(p.goal.by)}.
+                      That&rsquo;s <strong>{money(perMonth, false)} a month</strong> for {monthsLeft} month{monthsLeft === 1 ? "" : "s"} to reach {money(p.goal.target, false)} by {p.goal.by.length === 10 ? formatDate(p.goal.by) : longMonth(p.goal.by)}.
                     </p>
                   )}
                 </div>

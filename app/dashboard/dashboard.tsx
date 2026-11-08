@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Account, DashboardData, ScheduleEvent } from "../../lib/finance";
 import { BRAND } from "../../lib/brand";
+import { SignOutButton } from "@clerk/nextjs";
 import { categoryTotals, monthlyTotals, runForecast, type Forecast } from "../../lib/forecast";
 import { categoryMeta, longMonth, money } from "../../lib/format";
 import { shortDay } from "../../lib/plans";
@@ -35,7 +36,7 @@ const POLL_MS = 5000;
 const GIVE_UP_MS = 3 * 60 * 1000;
 const BUDGETS_KEY = "foresight.budgets";
 
-export default function Dashboard({ data, source: initialSource, sourceError }: { data: DashboardData; source: Source; sourceError?: string }) {
+export default function Dashboard({ data, source: initialSource, sourceError, member }: { data: DashboardData; source: Source; sourceError?: string; member?: { name: string; type: "individual" | "company" } }) {
   const [tab, setTab] = useState<Tab>("View");
   const latest = data.months.at(-1)!;
   const { prefs, ready } = usePrefs();
@@ -136,10 +137,19 @@ export default function Dashboard({ data, source: initialSource, sourceError }: 
         <a className={styles.brand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
         <div className={styles.profile}>
           <div>
-            <p className={styles.hello}>Welcome back{prefs?.name ? `, ${prefs.name}` : ""}</p>
-            <p className={styles.profileSub}>Synthetic profile {data.customerId} · as of {data.asOf}</p>
+            <p className={styles.hello}>Welcome back{member ? `, ${member.name.split(" ")[0]}` : prefs?.name ? `, ${prefs.name}` : ""}</p>
+            <p className={styles.profileSub}>
+              {member ? `Signed in · ${member.type === "company" ? "Company" : "Individual"} · ` : ""}Synthetic profile {data.customerId} · as of {data.asOf}
+            </p>
           </div>
-          <a className={styles.avatar} href="/onboarding" title="Change your setup" aria-label="Change your setup">{(prefs?.name || data.customerId).slice(0, 1).toUpperCase()}</a>
+          <a className={styles.avatar} href="/onboarding" title="Change your setup" aria-label="Change your setup">{(member?.name || prefs?.name || data.customerId).slice(0, 1).toUpperCase()}</a>
+          {member ? (
+            <SignOutButton redirectUrl="/">
+              <button type="button" className={styles.signOut}>Sign out</button>
+            </SignOutButton>
+          ) : (
+            <a className={styles.signOut} href="/start?mode=signin">Sign in</a>
+          )}
         </div>
       </header>
 

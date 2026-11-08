@@ -10,7 +10,7 @@ import { FuturesCard, WarnCard } from "./landing-futures";
 
 const DEMO_HREF = "/onboarding?demo=1";
 // The demo profile's goal (same as DEMO_PREFS in lib/prefs.ts), so the landing matches the demo.
-const DEMO_GOAL: Prefs["goal"] = { kind: "trip", label: "Trip to Cancún", target: 1500, saved: 960, by: "2027-03" };
+const DEMO_GOAL: Prefs["goal"] = { kind: "trip", label: "Trip to Cancún", target: 1500, saved: 960, by: "2027-03-10" };
 
 export const metadata: Metadata = {
   title: `${BRAND} · ${SLOGAN}`,
@@ -72,7 +72,7 @@ export default async function Landing() {
           <p className={styles.micro}>The demo uses a sample customer. Nothing to install.</p>
         </div>
         <div className={styles.heroArt}>
-          <FuturesCard plan={plan} accounts={accounts} tripDate={`${DEMO_GOAL.by}-10`} />
+          <FuturesCard plan={plan} accounts={accounts} tripDate={DEMO_GOAL.by} />
           <p className={styles.fCaption}>Live from the demo: a sample customer, with real balances from Capital One&rsquo;s Nessie API.</p>
         </div>
       </section>

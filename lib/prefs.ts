@@ -14,7 +14,7 @@ export type Prefs = {
   units: "dollars" | "days";
   period: 1 | 3;
   goals: GoalKind[];
-  goal: { kind: GoalKind; label: string; target: number; saved: number; by: string }; // by = YYYY-MM
+  goal: { kind: GoalKind; label: string; target: number; saved: number; by: string }; // by = YYYY-MM-DD (older saved setups may still hold YYYY-MM)
   consent: { pnc: boolean; capitalOne: boolean; disclaimer: boolean };
   completedAt: string;
 };
@@ -38,7 +38,7 @@ export const DEMO_PREFS: Prefs = {
   units: "dollars",
   period: 3,
   goals: ["trip", "emergency"],
-  goal: { kind: "trip", label: "Trip to Cancún", target: 1500, saved: 960, by: "2027-03" },
+  goal: { kind: "trip", label: "Trip to Cancún", target: 1500, saved: 960, by: "2027-03-10" },
   consent: { pnc: true, capitalOne: true, disclaimer: true },
   completedAt: "",
 };

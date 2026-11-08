@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import { BRAND, SLOGAN } from "../lib/brand";
 import "./globals.css";
 
@@ -8,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return (
+    <ClerkProvider>
+      <html lang="en"><body>{children}</body></html>
+    </ClerkProvider>
+  );
 }
