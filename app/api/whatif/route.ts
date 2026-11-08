@@ -10,6 +10,8 @@
 //      retried once, then replaced by a deterministic reply built from the same facts.
 import { NextResponse } from "next/server";
 import { numbersIn, unverified } from "../../../lib/explain";
+import { getCompany } from "../../../lib/companies";
+import { companyDashboardData, todayIso } from "../../../lib/company-dashboard";
 import { getDashboardData } from "../../../lib/finance";
 import { geminiConfigured, generateJson } from "../../../lib/gemini";
 import { longMonth, money } from "../../../lib/format";
@@ -123,8 +125,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Type a what-if in a sentence or two — e.g. “What if I buy a $2,400 laptop in December?”" }, { status: 400 });
   }
 
-  const data = getDashboardData("C005");
-  const live = await withLiveBalances(data.accounts);
+  // A company's what-if runs on that company's own data (body.companyId); otherwise the personal demo customer.
+  let data = getDashboardData("C005");
+  let live: { accounts: typeof data.accounts; source: "nessie" | "demo" };
+  if (typeof body?.companyId === "string" && body.companyId) {
+    const result = await getCompany(body.companyId);
+    if (!("company" in result)) return NextResponse.json({ error: result.error }, { status: 502 });
+    data = companyDashboardData(result.company, todayIso()).data;
+    live = { accounts: data.accounts, source: "nessie" };
+  } else {
+    live = await withLiveBalances(data.accounts);
+  }
   const accounts = live.accounts;
 
   // Typical-month category totals, so the parser knows what there is to cut.

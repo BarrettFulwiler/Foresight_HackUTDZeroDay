@@ -2,11 +2,12 @@
 .page {
   --ink: #0e1726;
   --muted: #667085;
-  --bg: #eef1fa;
+  --bg: #eef1f4;
   --panel: #ffffff;
   --line: #e7eaf3;
-  --accent: #3b5bfd;
-  --violet: #8b5cf6;
+  --accent: #1a66ad; /* bank blue */
+  --accent-dark: #134f87;
+  --teal: #0f7c80; /* future-you and Gemini (was purple) */
   --pos: #16a34a;
   --neg: #dc2626;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -15,7 +16,7 @@
   margin: 0;
   padding: 0 0 24px;
   min-height: 100vh;
-  background: radial-gradient(1200px 500px at 85% -10%, #e4e2fb 0%, transparent 60%), var(--bg);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font);
 }
@@ -54,7 +55,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: conic-gradient(from 200deg, var(--accent), var(--violet), var(--accent));
+  background: var(--accent);
 }
 
 .profile {
@@ -84,7 +85,7 @@
   place-items: center;
   color: #fff;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--accent), var(--violet));
+  background: var(--teal);
 }
 
 .avatar {
@@ -100,8 +101,23 @@
 
 .panel.cashCard {
   color: #fff;
-  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 60%, #93c5fd 100%);
-  box-shadow: 0 14px 30px #1d4ed833;
+  background: #174a7c;
+  box-shadow: 0 14px 30px #174a7c33;
+  position: relative;
+  overflow: hidden;
+}
+
+/* A quiet ring in the corner (after PNC's circle shapes), instead of a gradient. */
+.panel.cashCard::after {
+  content: "";
+  position: absolute;
+  top: -70px;
+  right: -50px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: 30px solid #ffffff12;
+  pointer-events: none;
 }
 
 .cashLabel {
@@ -151,7 +167,7 @@
 }
 
 .goalCard .meter span {
-  background: linear-gradient(90deg, var(--accent), var(--violet));
+  background: var(--accent);
 }
 
 .editLink,
@@ -182,7 +198,7 @@
   border-radius: 24px;
   background: var(--panel);
   border: 1px solid #c9d3fb;
-  box-shadow: 0 12px 32px #3b5bfd1f;
+  box-shadow: 0 12px 32px #1a66ad1f;
   animation: dropIn 0.35s ease-out;
 }
 
@@ -195,7 +211,7 @@
   color: #fff;
   font-weight: 700;
   font-size: 18px;
-  background: linear-gradient(135deg, var(--accent), var(--violet));
+  background: var(--teal);
 }
 
 .welcomeFrom {
@@ -947,7 +963,7 @@
 }
 
 .meter .meterOver {
-  background: linear-gradient(90deg, var(--accent), var(--neg));
+  background: var(--neg);
 }
 
 /* ---------- Money summary (account cards) ---------- */
@@ -1000,7 +1016,7 @@
   padding: 20px 20px 16px 52px;
   color: #fff;
   overflow: hidden;
-  box-shadow: 0 14px 28px #1d4ed82e;
+  box-shadow: 0 14px 28px #1a66ad2e;
 }
 
 .acctLead {
@@ -1009,31 +1025,31 @@
 }
 
 .acct_cash {
-  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 55%, #93c5fd 100%);
+  background: #1a66ad;
 }
 
 .acct_investment {
-  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 60%, #99f6e4 100%);
+  background: #0f7c80;
   box-shadow: 0 14px 28px #0f766e2e;
 }
 
 .acct_credit {
-  background: linear-gradient(135deg, #3730a3 0%, #6366f1 60%, #a5b4fc 100%);
+  background: #3d4a59;
   box-shadow: 0 14px 28px #3730a32e;
 }
 
 .acct_loan {
-  background: linear-gradient(135deg, #111827 0%, #334155 60%, #64748b 100%);
+  background: #1f2933;
   box-shadow: 0 14px 28px #1118272e;
 }
 
 .acct.acctAlt {
-  background: linear-gradient(135deg, #0e7490 0%, #06b6d4 60%, #a5f3fc 100%);
+  background: #0b5e8a;
   box-shadow: 0 14px 28px #0e74902e;
 }
 
 .acct.acct_credit.acctAlt {
-  background: linear-gradient(135deg, #6d28d9 0%, #a855f7 60%, #e9d5ff 100%);
+  background: #a33a2c;
 }
 
 .acctWatermark {
@@ -1138,13 +1154,13 @@
   font-size: 16px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  background: var(--accent);
   cursor: pointer;
 }
 
 .primaryBtn:disabled,
 .primaryBtn:disabled:hover {
-  background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  background: var(--accent);
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -1392,8 +1408,8 @@
 }
 
 .voiceFuture {
-  --tone: var(--violet);
-  background: linear-gradient(160deg, #faf8ff, #ffffff);
+  --tone: var(--teal);
+  background: #f6fbfb;
 }
 
 .voiceLabel {
@@ -1900,8 +1916,8 @@
 
 /* Advising: Gemini's note from future-you */
 .noteCard {
-  --tone: #a855f7;
-  background: linear-gradient(160deg, #f5efff, #ffffff 70%);
+  --tone: var(--teal);
+  background: #f3faf9;
 }
 
 .noteText {
@@ -1925,7 +1941,7 @@
 .checkedNum {
   font-weight: 700;
   color: inherit;
-  background: #ede9fe;
+  background: #dcefed;
   border-radius: 4px;
   padding: 0 3px;
 }
@@ -1952,7 +1968,7 @@
   font-size: 14px;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  background: var(--teal);
   cursor: pointer;
 }
 
@@ -2004,7 +2020,7 @@
 }
 .page .gemInput:focus-visible { outline: 0; }
 .gemBox:focus-within {
-  border-color: #9b72cb;
+  border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(155, 114, 203, 0.18);
 }
 .gemBtn {
@@ -2036,7 +2052,7 @@
   height: 1em;
   margin-left: 2px;
   vertical-align: text-bottom;
-  background: #9b72cb;
+  background: var(--teal);
   animation: gemBlink 0.9s steps(1) infinite;
 }
 @keyframes gemBlink { 50% { opacity: 0; } }
@@ -2757,4 +2773,167 @@
   .wfLabels {
     font-size: 11px;
   }
+}
+
+/* ---------- Nav: one slim slate bar (PNC-style gray, lightened) with a Capital One-blue underline ---------- */
+.navBar {
+  --slate: #4a5560;
+  --slate-ink: #ffffff;
+  --slate-muted: #c9d0d8;
+  --underline: #4ea8e6; /* Capital One blue, lightened so it reads on the slate */
+  background: var(--slate);
+  color: var(--slate-ink);
+  box-shadow: 0 1px 0 #00000014;
+}
+
+.navInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.navBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 750;
+  color: var(--slate-ink);
+  text-decoration: none;
+  flex: none;
+}
+
+.navTabs {
+  align-self: stretch;
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.navTab,
+.navTabOn {
+  position: relative;
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--slate-muted);
+  cursor: pointer;
+}
+
+.navTab:hover {
+  color: var(--slate-ink);
+}
+
+.navTabOn {
+  color: var(--slate-ink);
+}
+
+.navTabOn::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--underline);
+}
+
+.page .navBar button:focus-visible,
+.page .navBar a:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -4px;
+}
+
+.navProfile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: right;
+  flex: none;
+}
+
+.navHello {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.navSub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--slate-muted);
+}
+
+.navProfile .avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
+}
+
+.navBar + .body {
+  padding-top: 24px;
+}
+
+@media (max-width: 760px) {
+  .navInner {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 0 16px;
+    padding: 0 16px;
+  }
+
+  .navBrand {
+    height: 52px;
+  }
+
+  .navProfile {
+    margin-left: auto;
+  }
+
+  .navProfile div {
+    display: none;
+  }
+
+  .navTabs {
+    order: 3;
+    flex-basis: 100%;
+    height: 44px;
+    margin: 0 -14px;
+    border-top: 1px solid #ffffff1f;
+  }
+}
+
+/* Company dashboard: one line naming the company, with a link to load another. */
+.companyStrip {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.companyStrip a {
+  font-weight: 650;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.companyStrip a:hover {
+  text-decoration: underline;
 }

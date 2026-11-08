@@ -17,13 +17,14 @@ type Cat = ReturnType<typeof categoryMeta> & { key: string; amount: number; shar
 // layout = donut chart with a category list, ranked bars, spending vs. monthly budget, or a table (set on the Edit tab).
 // budget = monthly budget per category: the user's Edit-tab budget, or their typical month if they haven't set one.
 // custom = categories whose budget the user set on the Edit tab (the rest use the typical month).
-export default function SpendingDonut({ months, txns, windowSize = 3, layout = "chart", budget = {}, custom = [] }: {
+export default function SpendingDonut({ months, txns, windowSize = 3, layout = "chart", budget = {}, custom = [], note }: {
   months: MonthSpend[];
   txns: Txn[];
   windowSize?: number;
   layout?: Display["spending"];
   budget?: Record<string, number>;
   custom?: string[];
+  note?: string; // e.g. that a company's earlier months are estimated
 }) {
   const WINDOW = windowSize;
   const [end, setEnd] = useState(months.length - 1);
@@ -113,6 +114,7 @@ export default function SpendingDonut({ months, txns, windowSize = 3, layout = "
         {view.slice.length > 1
           ? `Totals for these ${view.slice.length} months. Income averages ${money(view.income / view.slice.length, false)} a month.`
           : "Totals for this month."}
+        {note ? ` ${note}` : ""}
       </p>
 
       {layout === "bars" ? (

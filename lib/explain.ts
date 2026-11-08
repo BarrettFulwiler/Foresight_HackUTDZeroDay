@@ -1,5 +1,6 @@
 // "Code does the math; the AI explains it." The facts below come only from the forecast engine.
 // Gemini rewrites them in future-you's voice, and any reply with a number that isn't in the facts is rejected.
+import { BUSINESS_PRESETS } from "./business-plans";
 import type { Account } from "./finance";
 import { longMonth, money } from "./format";
 import { compareRows, PRESETS, type Plan } from "./plans";
@@ -22,13 +23,15 @@ export const splitNumbers = (text: string) =>
 export function planFacts(plan: Plan, accounts: Account[]): string[] {
   const r = (n: number) => money(n, false);
   const m = plan.asIs.monthly;
-  const title = PRESETS.find((p) => p.id === plan.id)?.title ?? plan.id;
+  const business = BUSINESS_PRESETS.find((p) => p.id === plan.id);
+  const title = (business ?? PRESETS.find((p) => p.id === plan.id))?.title ?? plan.id;
+  const pay = business ? "customer payments" : "paychecks";
   const cards = accounts.filter((a) => a.kind === "credit").map((a) => a.id);
   return [
     `What-if: ${title}.`,
     `The forecast covers the next 12 months, ${longMonth(plan.asIs.months[0].month)} to ${longMonth(plan.asIs.months.at(-1)!.month)}.`,
-    `Each month, paychecks bring in ${r(m.income)}, spending is ${r(m.spending)}, loan payments are ${r(m.loanPayments)} and card interest is ${r(m.cardInterest)}.`,
-    m.shortfall < 0 ? `Bills outrun paychecks by ${r(-m.shortfall)} a month.` : `Paychecks cover the bills with ${r(m.shortfall)} a month to spare.`,
+    `Each month, ${pay} bring in ${r(m.income)}, spending is ${r(m.spending)}, loan payments are ${r(m.loanPayments)} and card interest is ${r(m.cardInterest)}.`,
+    m.shortfall < 0 ? `Bills outrun ${pay} by ${r(-m.shortfall)} a month.` : `${pay[0].toUpperCase()}${pay.slice(1)} cover the bills with ${r(m.shortfall)} a month to spare.`,
     `Present-you wants: ${plan.want}`,
     ...plan.warnings.map((w) => `Future-you warns: ${w}`),
     ...plan.steps.map((s, i) => `Plan step ${i + 1}: ${s}`),

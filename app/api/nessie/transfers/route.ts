@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { NessieError, createTransfer, getAccount, settleEarly } from "../../../../lib/nessie";
+import { BIZ_TAG } from "../../../../lib/companies";
+import { NessieError, createTransfer, getAccount, nessieGet, settleEarly } from "../../../../lib/nessie";
 import { invalidateLiveBalances, linkedNessieIds } from "../../../../lib/live-accounts";
 
 export const dynamic = "force-dynamic";
@@ -8,24 +9,33 @@ export const dynamic = "force-dynamic";
 const recent = new Map<string, { at: number; body: unknown }>();
 const REPLAY_MS = 2 * 60 * 1000;
 
-// POST /api/nessie/transfers { fromId, toId, amount, requestId } → the pending Nessie transaction.
+// POST /api/nessie/transfers { fromId, toId, amount, requestId, companyId? } → the pending Nessie transaction.
+// Without companyId: only the personal demo's linked accounts. With companyId: only that company's own accounts.
 export async function POST(req: NextRequest) {
-  const { fromId, toId, amount, requestId, note } = (await req.json().catch(() => ({}))) as {
-    fromId?: string; toId?: string; amount?: number; requestId?: string; note?: string;
+  const { fromId, toId, amount, requestId, note, companyId } = (await req.json().catch(() => ({}))) as {
+    fromId?: string; toId?: string; amount?: number; requestId?: string; note?: string; companyId?: string;
   };
 
   const now = Date.now();
   for (const [k, v] of recent) if (now - v.at > REPLAY_MS) recent.delete(k);
   if (requestId && recent.has(requestId)) return NextResponse.json(recent.get(requestId)!.body);
 
-  const allowed = linkedNessieIds();
   const cents = Math.round(Number(amount) * 100);
-  if (!fromId || !toId || !allowed.has(fromId) || !allowed.has(toId)) return bad("Pick two linked accounts.");
+  if (!fromId || !toId) return bad("Pick two linked accounts.");
   if (fromId === toId) return bad("Choose two different accounts.");
   if (!Number.isFinite(cents) || cents < 1) return bad("Enter an amount greater than $0.");
+  if (!companyId) {
+    const allowed = linkedNessieIds();
+    if (!allowed.has(fromId) || !allowed.has(toId)) return bad("Pick two linked accounts.");
+  }
 
   try {
     const from = await getAccount(fromId);
+    if (companyId) {
+      // Both accounts must belong to this company, and it must be one of the seeded "[Biz]" companies.
+      const [to, owner] = await Promise.all([getAccount(toId), nessieGet<{ first_name?: string }>(`/customers/${encodeURIComponent(companyId)}`)]);
+      if (!owner?.first_name?.endsWith(BIZ_TAG) || from.customer_id !== companyId || to.customer_id !== companyId) return bad("Pick two of the company's accounts.");
+    }
     if (from.type === "Credit Card") return bad("Money can't be moved out of a credit card here.");
     if (cents > from.available_cents) return bad(`Only $${(from.available_cents / 100).toFixed(2)} is available in ${from.nickname}.`);
 
