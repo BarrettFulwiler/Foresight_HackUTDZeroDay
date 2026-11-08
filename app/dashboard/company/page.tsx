@@ -5,6 +5,8 @@ import { DEMO_COOKIE, authConfigured, currentMember } from "../../../lib/auth";
 import { BRAND } from "../../../lib/brand";
 import { getRandomCompany } from "../../../lib/companies";
 import { companyDashboardData, todayIso } from "../../../lib/company-dashboard";
+import { memberDashboard } from "../../../lib/member-accounts";
+import AccountsShell from "../accounts-shell";
 import Dashboard from "../dashboard";
 import base from "../dashboard.module.css";
 
@@ -18,10 +20,21 @@ export default async function CompanyPage() {
   const member = await currentMember();
   const demo = (await cookies()).get(DEMO_COOKIE)?.value === "1";
   if (authConfigured() && !member && !demo) redirect("/start?mode=signin&error=signin_required");
+
+  // A signed-in company sees its own accounts from Nessie; individuals have the personal dashboard.
+  if (member) {
+    if (member.type !== "company") redirect("/dashboard");
+    const own = await memberDashboard(member).catch(() => null);
+    if (!own) return <AccountsShell name={member.name} audience="company" />;
+    const info = { id: member.nessieCustomerId, name: member.name, industry: "", city: "", pool: 0 };
+    return <Dashboard data={own.data} source="nessie" company={info} member={{ name: member.name, type: member.type, ready: own.ready, missing: own.missing }} />;
+  }
+
+  // The demo: a random seeded "[Biz]" company on each visit.
   const result = await getRandomCompany();
   if ("company" in result) {
     const { data, info } = companyDashboardData(result.company, todayIso());
-    return <Dashboard data={data} source="nessie" company={info} member={member ? { name: member.name, type: member.type } : undefined} />;
+    return <Dashboard data={data} source="nessie" company={info} />;
   }
   return (
     <main className={base.page}>

@@ -11,6 +11,8 @@
 import { NextResponse } from "next/server";
 import { numbersIn, unverified } from "../../../lib/explain";
 import { getCompany } from "../../../lib/companies";
+import { currentMember } from "../../../lib/auth";
+import { memberDashboard } from "../../../lib/member-accounts";
 import { companyDashboardData, todayIso } from "../../../lib/company-dashboard";
 import { getDashboardData } from "../../../lib/finance";
 import { geminiConfigured, generateJson } from "../../../lib/gemini";
@@ -128,7 +130,14 @@ export async function POST(req: Request) {
   // A company's what-if runs on that company's own data (body.companyId); otherwise the personal demo customer.
   let data = getDashboardData("C005");
   let live: { accounts: typeof data.accounts; source: "nessie" | "demo" };
-  if (typeof body?.companyId === "string" && body.companyId) {
+  // A signed-in member's what-if always runs on their own accounts.
+  const member = await currentMember();
+  if (member) {
+    const own = await memberDashboard(member).catch(() => null);
+    if (!own?.ready) return NextResponse.json({ error: "Add your accounts on the Accounts tab first." }, { status: 400 });
+    data = own.data;
+    live = { accounts: data.accounts, source: "nessie" };
+  } else if (typeof body?.companyId === "string" && body.companyId) {
     const result = await getCompany(body.companyId);
     if (!("company" in result)) return NextResponse.json({ error: result.error }, { status: 502 });
     data = companyDashboardData(result.company, todayIso()).data;

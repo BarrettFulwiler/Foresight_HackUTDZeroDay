@@ -1,0 +1,265 @@
+/* Accounts tab (accounts-manager.tsx). Uses the dashboard's tokens (--ink, --muted, --line, --accent, --panel). */
+.wrap {
+  background: var(--panel, #fff);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 12px 32px #1b2a5a12;
+  display: grid;
+  gap: 18px;
+}
+.embedded {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+.saved {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #e9f7ef;
+  color: #1b6b3e;
+  font-size: 14px;
+  font-weight: 600;
+}
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 750;
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted, #667085);
+  max-width: 620px;
+}
+.addBtn,
+.saveBtn {
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent, #3b5bfd);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.saveBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.cancelBtn {
+  border: 1px solid var(--line, #e7eaf3);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ink, #0e1726);
+  cursor: pointer;
+}
+.dangerBtn {
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 14px;
+  background: #c8372d;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.linkBtn,
+.linkBtnDanger {
+  border: 0;
+  padding: 4px 2px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent, #3b5bfd);
+  cursor: pointer;
+}
+.linkBtnDanger {
+  color: #c8372d;
+}
+.linkBtn:disabled,
+.linkBtnDanger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #eef3ff;
+  color: #1e3a8a;
+  font-size: 14px;
+  font-weight: 600;
+}
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fdecec;
+  color: #b42318;
+  font-size: 14px;
+}
+.empty {
+  margin: 0;
+  padding: 22px;
+  border: 1.5px dashed var(--line, #e7eaf3);
+  border-radius: 16px;
+  text-align: center;
+  color: var(--muted, #667085);
+  font-size: 14px;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line, #e7eaf3);
+  border-radius: 18px;
+  background: #f8f9fd;
+}
+.formTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--muted, #667085);
+}
+.field input,
+.field select {
+  width: 100%;
+  margin: 0;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #e7eaf3);
+  background: #fff;
+  color: var(--ink, #0e1726);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+}
+.field input[aria-invalid="true"],
+.field select[aria-invalid="true"] {
+  border-color: #c8372d;
+}
+.inputWrap {
+  position: relative;
+  display: block;
+}
+.dollar input {
+  padding-left: 24px;
+}
+.dollar::before,
+.percent::after {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted, #667085);
+  font-size: 15px;
+  pointer-events: none;
+}
+.dollar::before {
+  content: "$";
+  left: 12px;
+}
+.percent input {
+  padding-right: 28px;
+}
+.percent::after {
+  content: "%";
+  right: 12px;
+}
+.fieldError {
+  color: #b42318;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.group {
+  display: grid;
+  gap: 8px;
+}
+.groupTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #667085);
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line, #e7eaf3);
+  flex-wrap: wrap;
+}
+.rowMain {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rowMain strong {
+  font-size: 15px;
+}
+.rowMain span {
+  font-size: 13px;
+  color: var(--muted, #667085);
+}
+.rowValues {
+  color: var(--ink, #0e1726) !important;
+}
+.rowActions {
+  display: flex;
+  gap: 14px;
+}
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b42318;
+}

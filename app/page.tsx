@@ -74,7 +74,7 @@ export default async function Landing() {
         <nav className={styles.navLinks} aria-label="Main">
           <a href="#how">How it works</a>
           <a href="/dashboard">Dashboard</a>
-          <a className={styles.navCta} href="/onboarding">Sign in</a>
+          <a className={styles.navCta} href="/start?mode=signin">Sign in</a>
         </nav>
       </header>
 
@@ -170,6 +170,7 @@ export default async function Landing() {
         <p className={styles.body}>Set up your own view in a couple of minutes.</p>
         <div className={styles.ctas}>
           <a className={styles.primary} href="/onboarding">Set up your own view</a>
+          <a className={styles.secondary} href="/onboarding?demo=1">Demo it</a>
         </div>
       </section>
 

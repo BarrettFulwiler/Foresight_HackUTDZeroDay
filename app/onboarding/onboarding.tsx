@@ -2,11 +2,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "../../lib/brand";
-import { categoryMeta, longMonth, money, shortMonth } from "../../lib/format";
+import { categoryMeta, currencySymbol, longMonth, money, moneyIn, shortMonth } from "../../lib/format";
 import { DEMO_PREFS, type GoalKind, type Prefs, goalOption, goalOptionsFor, monthsUntil, savePrefs } from "../../lib/prefs";
 import type { Summary } from "../../lib/summary";
 import { markDemo } from "../../lib/auth-client";
 import DatePicker, { formatDate } from "./date-picker";
+import AccountsManager from "../dashboard/accounts-manager";
+import FlowsManager from "../dashboard/flows-manager";
 import styles from "./onboarding.module.css";
 
 const STEPS = ["Who it's for", "Location", "Your view", "Goals", "Consent"];
@@ -73,6 +75,10 @@ const BLANK: Draft = {
   consent: { pnc: false, capitalOne: false, disclaimer: false },
 };
 
+// Amounts in the chosen currency, with its code in front: "MXN $1,500", "USD $1,500", "CAD $1,500".
+// The numbers themselves aren't converted: the accounts behind them are in US dollars.
+const amountIn = (n: number, cur: string) => `${cur} $${Math.round(n).toLocaleString("en-US")}`;
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const isoDay = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000);
@@ -81,10 +87,14 @@ const monthsAfter = (ymd: string, n: number) => {
   return isoDay(new Date(y, m - 1 + n, d));
 };
 
-export default function Onboarding({ summary }: { summary: Summary }) {
+export default function Onboarding({ summary, memberType }: { summary: Summary; memberType?: "individual" | "company" }) {
+  // Signed-in members add their accounts as a step before Consent; visitors skip it.
+  // They also enter their monthly income and expenses, which the dashboard's charts and forecast are built from.
+  const steps = memberType ? [...STEPS.slice(0, 4), "Accounts", "Income", "Expenses", "Consent"] : STEPS;
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [p, setP] = useState<Draft>(BLANK);
+  // A signed-in client's type (individual or company) is fixed when the account is created, so it starts chosen.
+  const [p, setP] = useState<Draft>(memberType ? { ...BLANK, accountType: memberType } : BLANK);
   const [today, setToday] = useState("");
   useEffect(() => setToday(isoDay(new Date())), []);
 
@@ -107,19 +117,27 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   const setGoal = (g: Partial<Prefs["goal"]>) => setP((cur) => ({ ...cur, goal: { ...cur.goal, ...g } }));
   const setConsent = (c: Partial<Prefs["consent"]>) => setP((cur) => ({ ...cur, consent: { ...cur.consent, ...c } }));
   // Personal and business goals are different lists, so switching who it's for clears the goals picked so far.
+  // Signed-in clients can't change it (see memberType above); only visitors pick here.
   const setType = (accountType: Prefs["accountType"]) =>
-    setP((cur) => (cur.accountType === accountType ? cur : { ...cur, accountType, goals: [], goal: BLANK.goal }));
+    memberType ? undefined : setP((cur) => (cur.accountType === accountType ? cur : { ...cur, accountType, goals: [], goal: BLANK.goal }));
   const business = p.accountType === "company";
   const options = goalOptionsFor(p.accountType || "individual");
   const regions = REGIONS[p.country];
 
-  const valid = [
-    Boolean(p.accountType),
-    Boolean(p.country && p.state && p.currency),
-    Boolean(p.view && p.units && p.period),
-    p.goals.length > 0 && p.goal.target > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.goal.by) && (!today || p.goal.by >= today),
-    p.consent.pnc && p.consent.disclaimer,
-  ][step];
+  const stepName = steps[step];
+  // Which accounts, income and expenses they can add follows the client's type, fixed when they signed up.
+  const kind: "individual" | "company" = memberType || p.accountType || "individual";
+  const next = () => setStep(step + 1);
+  const valid = {
+    "Who it's for": Boolean(p.accountType),
+    Location: Boolean(p.country && p.state && p.currency),
+    "Your view": Boolean(p.view && p.units && p.period),
+    Goals: p.goals.length > 0 && p.goal.target > 0 && /^\d{4}-\d{2}-\d{2}$/.test(p.goal.by) && (!today || p.goal.by >= today),
+    Accounts: true, // accounts, income and expenses can also be added later on the dashboard
+    Income: true,
+    Expenses: true,
+    Consent: p.consent.pnc && p.consent.disclaimer,
+  }[stepName];
 
   function complete(d: Draft) {
     // Every step had to be filled in before this button unlocks, so the draft is a full setup now.
@@ -151,6 +169,10 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   const perMonth = monthsLeft ? left / monthsLeft : 0;
   const perDay = daysLeft ? left / daysLeft : 0;
   const enough = p.goal.target > 0 && p.goal.saved >= p.goal.target;
+  // Goal amounts use the currency picked on the Location step (USD until one is picked).
+  const cur = p.currency || "USD";
+  const inCur = (n: number) => amountIn(n, cur);
+  const sym = `${cur} $`;
 
   return (
     <main className={styles.page}>
@@ -163,22 +185,27 @@ export default function Onboarding({ summary }: { summary: Summary }) {
       </header>
 
       <div className={styles.flow}>
-        <div className={styles.progress} aria-label={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`}>
-          <div className={styles.progressBar}><span style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} /></div>
+        <div className={styles.progress} aria-label={`Step ${step + 1} of ${steps.length}: ${stepName}`}>
+          <div className={styles.progressBar}><span style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
           <ol className={styles.stepNames}>
-            {STEPS.map((s, i) => <li key={s} className={i === step ? styles.stepNow : i < step ? styles.stepDone : undefined}>{s}</li>)}
+            {steps.map((s, i) => <li key={s} className={i === step ? styles.stepNow : i < step ? styles.stepDone : undefined}>{s}</li>)}
           </ol>
         </div>
 
-        <section className={`${styles.card} ${step === 2 ? styles.cardWide : ""}`} aria-live="polite">
+        <section className={`${styles.card} ${stepName === "Your view" || stepName === "Accounts" || stepName === "Income" || stepName === "Expenses" ? styles.cardWide : ""}`} aria-live="polite">
           {step === 0 && (
             <>
               <h1 className={styles.stepTitle}>{p.name ? `Hi ${p.name}! ` : ""}Who is this for?</h1>
               <p className={styles.stepSub}>We&rsquo;ll tailor what you see to how you use money.</p>
               <div className={styles.choices} role="radiogroup" aria-label="Account type">
-                <Choice checked={p.accountType === "individual"} title="Just me" text="My own accounts, bills and goals." onSelect={() => setType("individual")} />
-                <Choice checked={p.accountType === "company"} title="My company" text="Business accounts, loans and cash on hand." onSelect={() => setType("company")} />
+                <Choice checked={p.accountType === "individual"} disabled={Boolean(memberType) && memberType !== "individual"} title="Just me" text="My own accounts, bills and goals." onSelect={() => setType("individual")} />
+                <Choice checked={p.accountType === "company"} disabled={Boolean(memberType) && memberType !== "company"} title="My company" text="Business accounts, loans and cash on hand." onSelect={() => setType("company")} />
               </div>
+              {memberType && (
+                <p className={styles.stepSub} style={{ marginTop: 12 }}>
+                  You created {memberType === "company" ? "a company" : "a personal"} account, so this is set and can&rsquo;t be changed.
+                </p>
+              )}
             </>
           )}
 
@@ -221,7 +248,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
                   <Choice small checked={p.view === "detailed"} title="Detailed" text="Every category, every chart." onSelect={() => set("view", "detailed")} />
                 </Group>
                 <Group label="Show my cash as">
-                  <Choice small checked={p.units === "dollars"} title="Dollars" text={money(summary.liquid, false)} onSelect={() => set("units", "dollars")} />
+                  <Choice small checked={p.units === "dollars"} title={cur === "MXN" ? "Pesos" : "Dollars"} text={inCur(summary.liquid)} onSelect={() => set("units", "dollars")} />
                   <Choice small checked={p.units === "days"} title="Days it lasts" text={`${summary.runwayDays} days`} onSelect={() => set("units", "days")} />
                 </Group>
                 <Group label="Spending view">
@@ -229,7 +256,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
                   <Choice small checked={p.period === 3} title="3 months" text="Smooths out big bills." onSelect={() => set("period", 3)} />
                 </Group>
               </div>
-              <Preview p={p} summary={summary} />
+              <Preview p={p} summary={summary} fmt={inCur} />
             </div>
           )}
 
@@ -258,10 +285,10 @@ export default function Onboarding({ summary }: { summary: Summary }) {
                     <label className={styles.field}>Name it
                       <input value={p.goal.label} onChange={(e) => setGoal({ label: e.target.value })} placeholder={goalOption(p.goal.kind)?.example ?? ""} />
                     </label>
-                    <label className={styles.field}>Target ($)
+                    <label className={styles.field}>Target ({sym})
                       <input inputMode="numeric" value={p.goal.target || ""} onChange={(e) => setGoal({ target: Number(e.target.value.replace(/\D/g, "")) })} placeholder={business ? "150000" : "1500"} />
                     </label>
-                    <label className={styles.field}>{business ? "Set aside so far ($)" : "Saved so far ($)"}
+                    <label className={styles.field}>{business ? `Set aside so far (${sym})` : `Saved so far (${sym})`}
                       <input inputMode="numeric" value={p.goal.saved || ""} onChange={(e) => setGoal({ saved: Number(e.target.value.replace(/\D/g, "")) })} placeholder="0" />
                     </label>
                     <div className={styles.field}>
@@ -274,11 +301,11 @@ export default function Onboarding({ summary }: { summary: Summary }) {
                   ) : p.goal.target > 0 && hasBy ? (
                     <p className={styles.goalMath}>
                       {underMonth ? (
-                        <>That&rsquo;s <strong>{money(perDay, false)} a day</strong> for {daysLeft} day{daysLeft === 1 ? "" : "s"}</>
+                        <>That&rsquo;s <strong>{inCur(perDay)} a day</strong> for {daysLeft} day{daysLeft === 1 ? "" : "s"}</>
                       ) : (
-                        <>That&rsquo;s <strong>{money(perMonth, false)} a month</strong> for {monthsLeft} month{monthsLeft === 1 ? "" : "s"}</>
+                        <>That&rsquo;s <strong>{inCur(perMonth)} a month</strong> for {monthsLeft} month{monthsLeft === 1 ? "" : "s"}</>
                       )}{" "}
-                      to reach {money(p.goal.target, false)} by {formatDate(p.goal.by)}.
+                      to reach {inCur(p.goal.target)} by {formatDate(p.goal.by)}.
                     </p>
                   ) : null}
                 </div>
@@ -286,7 +313,31 @@ export default function Onboarding({ summary }: { summary: Summary }) {
             </>
           )}
 
-          {step === 4 && (
+          {stepName === "Accounts" && memberType && (
+            <>
+              <h1 className={styles.stepTitle}>{kind === "company" ? "Add the company's accounts" : "Add your accounts"}</h1>
+              <p className={styles.stepSub}>Add as many as you have, then press Continue. You can change them anytime from the dashboard.</p>
+              <AccountsManager audience={kind} embedded />
+            </>
+          )}
+
+          {stepName === "Income" && memberType && (
+            <>
+              <h1 className={styles.stepTitle}>{kind === "company" ? "Where does the company's revenue come from?" : "Where does your money come from?"}</h1>
+              <p className={styles.stepSub}>Add every source of income you get each month: paychecks, side work, {kind === "company" ? "customer payments, contracts" : "benefits"}. Add as many as you have, then press Continue.</p>
+              <FlowsManager kind="income" audience={kind} embedded />
+            </>
+          )}
+
+          {stepName === "Expenses" && memberType && (
+            <>
+              <h1 className={styles.stepTitle}>{kind === "company" ? "What does the company spend each month?" : "What do you spend each month?"}</h1>
+              <p className={styles.stepSub}>Add your regular bills and costs by category. Add as many as you have, then press Continue.</p>
+              <FlowsManager kind="expense" audience={kind} embedded />
+            </>
+          )}
+
+          {stepName === "Consent" && (
             <>
               <h1 className={styles.stepTitle}>You&rsquo;re in control</h1>
               <p className={styles.stepSub}>Choose what {BRAND} can do. You can change these anytime.</p>
@@ -309,8 +360,8 @@ export default function Onboarding({ summary }: { summary: Summary }) {
 
           <div className={styles.nav}>
             {step > 0 ? <button type="button" className={styles.backBtn} onClick={() => setStep(step - 1)}>Back</button> : <span />}
-            {step < STEPS.length - 1 ? (
-              <button type="button" className={styles.primaryBtn} disabled={!valid} onClick={() => setStep(step + 1)}>Continue</button>
+            {step < steps.length - 1 ? (
+              <button type="button" className={styles.primaryBtn} disabled={!valid} onClick={next}>Continue</button>
             ) : (
               <button type="button" className={styles.primaryBtn} disabled={!valid} onClick={() => complete(p)}>Finish setup</button>
             )}
@@ -358,7 +409,7 @@ function Consent({ checked, required, title, text, onChange }: { checked: boolea
 
 // Live mini-dashboard: changes as the user picks options in step 3.
 // Until a choice is made, it previews the detailed, dollars, 3-month view.
-function Preview({ p: draft, summary }: { p: Draft; summary: Summary }) {
+function Preview({ p: draft, summary, fmt }: { p: Draft; summary: Summary; fmt: (n: number) => string }) {
   const p = { view: draft.view || "detailed", units: draft.units || "dollars", period: draft.period || 3 };
   const months = summary.recent.slice(-p.period);
   const totals: Record<string, number> = {};
@@ -372,13 +423,13 @@ function Preview({ p: draft, summary }: { p: Draft; summary: Summary }) {
       <p className={styles.previewTag}>Live preview</p>
       <div className={styles.previewHero}>
         <span>{p.units === "days" ? "Your cash covers" : "Cash and savings"}</span>
-        <strong>{p.units === "days" ? `${summary.runwayDays} days` : money(summary.liquid, false)}</strong>
-        <small>{p.units === "days" ? `of spending at ${money(summary.monthlyOut, false)} a month` : "Across PNC and Capital One"}</small>
+        <strong>{p.units === "days" ? `${summary.runwayDays} days` : fmt(summary.liquid)}</strong>
+        <small>{p.units === "days" ? `of spending at ${fmt(summary.monthlyOut)} a month` : "Across PNC and Capital One"}</small>
       </div>
       <div className={styles.previewSpend}>
         <div className={styles.previewSpendHead}>
           <span>Spending · {range}</span>
-          <strong>{money(spent, false)}</strong>
+          <strong>{fmt(spent)}</strong>
         </div>
         <ul>
           {shown.map(([k, v], i) => {
@@ -388,7 +439,7 @@ function Preview({ p: draft, summary }: { p: Draft; summary: Summary }) {
                 <span className={styles.previewDot} style={{ background: meta.color }} aria-hidden="true" />
                 <span>{meta.label}</span>
                 {p.view === "detailed" && <span className={styles.previewBar}><span style={{ width: `${(v / (cats[0]?.[1] || 1)) * 100}%`, background: meta.color }} /></span>}
-                <span>{money(v, false)}</span>
+                <span>{fmt(v)}</span>
               </li>
             );
           })}

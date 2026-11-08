@@ -16,10 +16,14 @@ import MoneySummary from "./money-summary";
 import Health from "./health";
 import Advising from "./advising";
 import CreditScore from "./credit-score";
+import AccountsManager from "./accounts-manager";
+import FlowsManager from "./flows-manager";
+import AccountPies from "./account-pies";
 import styles from "./dashboard.module.css";
 
 const TABS = ["View", "Edit", "Move", "Advising"] as const;
-type Tab = (typeof TABS)[number];
+// Signed-in members also get an Accounts tab, where they add and edit their own accounts.
+type Tab = (typeof TABS)[number] | "Accounts";
 
 type Source = "nessie" | "demo";
 export type Receipt = {
@@ -40,8 +44,19 @@ const GIVE_UP_MS = 3 * 60 * 1000;
 const BUDGETS_KEY = "foresight.budgets";
 
 // company: set on /dashboard/company. The same dashboard then runs on that company's Nessie data (lib/company-dashboard.ts).
-export default function Dashboard({ data, source: initialSource, sourceError, company, member }: { data: DashboardData; source: Source; sourceError?: string; company?: CompanyInfo; member?: { name: string; type: "individual" | "company" } }) {
+export default function Dashboard({ data, source: initialSource, sourceError, company, member }: { data: DashboardData; source: Source; sourceError?: string; company?: CompanyInfo; member?: { name: string; type: "individual" | "company"; ready?: boolean; missing?: string } }) {
   const [tab, setTab] = useState<Tab>("View");
+  const tabs: Tab[] = member ? [...TABS, "Accounts"] : [...TABS];
+  // A member without the accounts a forecast needs (see lib/member-accounts.ts readiness) sees notes instead.
+  const canForecast = !member || member.ready !== false;
+  // After accounts change, the other tabs need fresh numbers: leaving the Accounts tab reloads onto the chosen tab.
+  const [accountsChanged, setAccountsChanged] = useState(false);
+  const openTab = (t: Tab) => (accountsChanged && t !== "Accounts" ? window.location.assign(`${window.location.pathname}?tab=${t}`) : setTab(t));
+  // ?tab=Accounts (after adding or editing an account) reopens that tab.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t && (tabs as string[]).includes(t)) setTab(t as Tab);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const latest = data.months.at(-1)!;
   const { prefs, ready } = usePrefs();
   const { display, set: setDisplay, edited: displayEdited, reset: resetDisplay, hidden, toggleHidden, showAll } = useDisplay(prefs);
@@ -76,12 +91,13 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
   const cuts = useMemo(() => Object.fromEntries(Object.entries(budgets).filter(([k]) => k in typical).map(([k, v]) => [k, typical[k] - v])), [budgets, typical]);
 
   const refreshAccounts = useCallback(async () => {
-    const res = await fetch(company ? `/api/company/accounts?id=${encodeURIComponent(company.id)}` : "/api/nessie/accounts", { cache: "no-store" });
+    const url = member ? "/api/accounts?for=dashboard" : company ? `/api/company/accounts?id=${encodeURIComponent(company.id)}` : "/api/nessie/accounts";
+    const res = await fetch(url, { cache: "no-store" });
     const body = (await res.json()) as { accounts: Account[]; source: Source };
     setAccounts(body.accounts);
     setSource(body.source);
     return body.accounts;
-  }, [company]);
+  }, [company, member]);
 
   const balanceOf = (list: Account[], nessieId: string) => list.find((a) => a.nessieId === nessieId)?.balance ?? 0;
 
@@ -92,7 +108,7 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
     setReceipts((r) => [receipt, ...r]);
     const update = (patch: Partial<Receipt>) => setReceipts((r) => r.map((x) => (x.requestId === requestId ? { ...x, ...patch } : x)));
     try {
-      const res = await fetch("/api/nessie/transfers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fromId, toId, amount, requestId, companyId: company?.id }) });
+      const res = await fetch("/api/nessie/transfers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fromId, toId, amount, requestId, companyId: member ? undefined : company?.id }) });
       const body = await res.json();
       if (!res.ok) update({ status: "failed", error: body.error || "Transfer failed" });
       else {
@@ -141,13 +157,13 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
   }, []);
 
   const who = company
-    ? { title: company.name, sub: `${company.industry} · ${company.city} · live from Nessie`, initial: company.name.slice(0, 1).toUpperCase() }
+    ? { title: company.name, sub: member ? `Signed in · your PNC accounts · as of ${data.asOf}` : `${company.industry} · ${company.city} · live from Nessie`, initial: company.name.slice(0, 1).toUpperCase() }
     : {
         title: `Welcome back${member ? `, ${member.name.split(" ")[0]}` : prefs?.name ? `, ${prefs.name}` : ""}`,
-        sub: `${member ? "Signed in · " : ""}Synthetic profile ${data.customerId} · as of ${data.asOf}`,
+        sub: member ? `Signed in · your PNC accounts · as of ${data.asOf}` : `Synthetic profile ${data.customerId} · as of ${data.asOf}`,
         initial: (member?.name || prefs?.name || data.customerId).slice(0, 1).toUpperCase(),
       };
-  const estimated = "Before this month, history is estimated from the company's recent Nessie activity.";
+  const estimated = member ? "Built from the monthly income and expenses you entered on the Accounts tab." : "Before this month, history is estimated from the company's recent Nessie activity.";
   // Cards this dashboard has (the credit score is personal only), minus the ones hidden on the Edit tab.
   const viewCards = VIEW_CARDS.filter((c) => !(company && c.personalOnly));
   const shown = (id: ViewCardId) => viewCards.some((c) => c.id === id) && !hidden.includes(id);
@@ -159,8 +175,8 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
         <div className={styles.navInner}>
           <a className={styles.navBrand} href="/"><img src="/brand/foresight-eye.png" alt="" width={43} height={24} style={{ display: "block" }} />{BRAND}</a>
           <nav className={styles.navTabs} role="tablist" aria-label="Dashboard">
-            {TABS.map((t) => (
-              <button key={t} type="button" role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls={`panel-${t}`} className={tab === t ? styles.navTabOn : styles.navTab} onClick={() => setTab(t)}>
+            {tabs.map((t) => (
+              <button key={t} type="button" role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls={`panel-${t}`} className={tab === t ? styles.navTabOn : styles.navTab} onClick={() => openTab(t)}>
                 {t}
               </button>
             ))}
@@ -186,7 +202,7 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
         {tab === "View" && (
           <>
             {welcome && prefs && !company && <Welcome prefs={prefs} onClose={() => setWelcome(false)} />}
-            {company && (
+            {company && company.pool > 0 && (
               <p className={styles.companyStrip}>
                 {company.industry} · {company.city} · one of {company.pool} companies in Nessie
                 <a href="/dashboard/company">Show another company</a>
@@ -200,18 +216,33 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
               </section>
             )}
             {(shown("cash") || shown("goal")) && (
-              <Highlights goal={goal} ready={ready} sum={sum} display={display} showCash={shown("cash")} showGoal={shown("goal")} where={company ? `across ${accounts.filter((a) => a.kind === "cash").length} business accounts` : "across PNC and Capital One"} />
+              <Highlights goal={goal} ready={ready} sum={sum} display={display} showCash={shown("cash")} showGoal={shown("goal")} where={company ? `across ${accounts.filter((a) => a.kind === "cash").length} business accounts` : member ? "across your PNC accounts" : "across PNC and Capital One"} />
             )}
+            {member && <AccountPies accounts={accounts} business={Boolean(company)} />}
             {(shown("spending") || shown("history")) && (
             <div className={shown("spending") && shown("history") ? styles.row : styles.rowSingle}>
               {shown("spending") && <section className={styles.panel}><SpendingDonut months={data.months} txns={data.transactions} windowSize={display.spendingMonths} layout={display.spending} budget={monthlyBudget} custom={Object.keys(budgets)} note={company ? estimated : undefined} business={Boolean(company)} /></section>}
               {shown("history") && <section className={styles.panel}><SavingsChart points={data.savingsHistory} topUps={data.topUps} layout={display.history} scope={company ? "All business checking and savings" : undefined} note={company ? estimated : undefined} /></section>}
             </div>
             )}
-            {shown("health") && <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={display.cash} cuts={cuts} business={Boolean(company)} />}
+            {!canForecast && (
+              <section className={styles.panel} role="status">
+                <h2 className={styles.cardTitle}>Your forecast is almost ready</h2>
+                <p className={styles.cardSub}>Add {member?.missing ?? "a checking account"} on the Accounts tab to see your forecast, plans and what-ifs.</p>
+                <button type="button" className={styles.linkBtn} onClick={() => openTab("Accounts")}>Go to Accounts →</button>
+              </section>
+            )}
+            {canForecast && shown("health") && <Health accounts={accounts} schedule={data.schedule} asOf={data.asOf} units={display.cash} cuts={cuts} business={Boolean(company)} />}
             {shown("budget") && <Budget income={latest.income} spending={latest.spending} loans={latest.loanPayments} month={latest.month} layout={display.budget} />}
             {shown("accounts") && <MoneySummary accounts={accounts} source={source} layout={display.accounts} business={Boolean(company)} />}
             {shown("credit") && data.credit && <CreditScore accounts={accounts} credit={data.credit} asOf={data.asOf} layout={display.credit} />}
+          </>
+        )}
+        {tab === "Accounts" && member && (
+          <>
+            <AccountsManager audience={member.type} onChanged={() => setAccountsChanged(true)} />
+            <FlowsManager kind="income" audience={member.type} onChanged={() => setAccountsChanged(true)} />
+            <FlowsManager kind="expense" audience={member.type} onChanged={() => setAccountsChanged(true)} />
           </>
         )}
         {tab === "Move" && <Move accounts={accounts} source={source} sourceError={sourceError} receipts={receipts} onTransfer={sendTransfer} />}
@@ -219,10 +250,17 @@ export default function Dashboard({ data, source: initialSource, sourceError, co
           <>
             <EditVisibility cards={viewCards} hidden={hidden} onToggle={toggleHidden} onShowAll={showAll} onOpen={setTab} />
             <EditDisplay display={display} onSet={setDisplay} edited={displayEdited} onReset={resetDisplay} onOpen={setTab} hidden={hidden} personal={!company} />
-            <EditBudgets typical={typical} budgets={budgets} onChange={updateBudgets} cuts={cuts} accounts={accounts} schedule={data.schedule} asOf={data.asOf} onOpen={setTab} />
+            {canForecast && <EditBudgets typical={typical} budgets={budgets} onChange={updateBudgets} cuts={cuts} accounts={accounts} schedule={data.schedule} asOf={data.asOf} onOpen={setTab} />}
           </>
         )}
-        {tab === "Advising" && (
+        {tab === "Advising" && !canForecast && (
+          <section className={styles.panel} role="status">
+            <h2 className={styles.cardTitle}>Add your accounts first</h2>
+            <p className={styles.cardSub}>Plans and what-ifs move money between accounts. Add {member?.missing ?? "a checking account"} on the Accounts tab.</p>
+            <button type="button" className={styles.linkBtn} onClick={() => openTab("Accounts")}>Go to Accounts →</button>
+          </section>
+        )}
+        {tab === "Advising" && canForecast && (
           <Advising
             accounts={accounts}
             schedule={data.schedule}

@@ -5,6 +5,19 @@ const LONG = ["January", "February", "March", "April", "May", "June", "July", "A
 export const money = (n: number, cents = true) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
 
+/** A currency's own symbol ("$" for USD, MXN and CAD alike). */
+export const currencySymbol = (currency: string) =>
+  (0).toLocaleString("en-US", { style: "currency", currency, currencyDisplay: "narrowSymbol" }).replace(/[\d.,\s]/g, "");
+
+/**
+ * Formats an amount in any currency with its plain symbol (MX$ becomes $). The country prefix (MX$, CA$) is added
+ * only when another currency shown alongside it (`alongside`) uses the same symbol, so the two can be told apart.
+ */
+export function moneyIn(n: number, currency: string, alongside: string[] = [], cents = false) {
+  const clash = alongside.some((c) => c !== currency && currencySymbol(c) === currencySymbol(currency));
+  return n.toLocaleString("en-US", { style: "currency", currency, currencyDisplay: clash ? "symbol" : "narrowSymbol", minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 });
+}
+
 export const shortMonth = (ym: string) => `${MONTHS[Number(ym.slice(5, 7)) - 1]} '${ym.slice(2, 4)}`;
 export const longMonth = (ym: string) => `${LONG[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
 /** A goal's day (YYYY-MM-DD). Goals picked with the date picker store the exact day; older ones stored only the month, so assume the 10th. */

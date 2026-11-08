@@ -19,8 +19,8 @@ export type CompanyAccount = {
   pending: number;
   limit?: number;
 };
-export type CompanyLoan = { id: string; type: string; status: string; amount: number; monthly: number; accountId: string };
-export type CompanyTxn = { id: string; kind: string; status: string; amount: number; direction: "in" | "out"; description: string; at: string; accountId: string; toId?: string }; // toId: a transfer's receiving account
+export type CompanyLoan = { id: string; type: string; status: string; amount: number; monthly: number; accountId: string; description?: string };
+export type CompanyTxn = { id: string; kind: string; status: string; amount: number; direction: "in" | "out"; description: string; at: string; accountId: string; toId?: string; category?: string; day?: number; label?: string }; // toId: a transfer's receiving account. category/day/label: set for a member's own income and expenses
 export type Company = {
   id: string;
   name: string;
@@ -82,10 +82,17 @@ export async function getCompany(id: string): Promise<CompanyResult> {
   }
 }
 
-async function loadCompany(chosen: Customer, pool: number): Promise<Company> {
+/** Any Nessie customer's accounts, loans and recent activity, in the same shape as a company. Used for signed-in
+ *  members (lib/member-accounts.ts); loansFrom limits which accounts are asked for loans (fewer Nessie calls). */
+export async function loadCustomer(customerId: string, loansFrom?: string[]): Promise<Company> {
+  const customer = await nessieGet<Customer>(`/customers/${encodeURIComponent(customerId)}`);
+  return loadCompany(customer, 0, loansFrom);
+}
+
+async function loadCompany(chosen: Customer, pool: number, loansFrom?: string[]): Promise<Company> {
   const accounts = itemsOf(await nessieGet<Page<NessieAccount>>(`/customers/${chosen.id}/accounts?limit=100`));
   const [loans, txns] = await Promise.all([
-    Promise.all(accounts.map((a) => nessieGet<Page<NessieLoan>>(`/accounts/${a.id}/loans?limit=100`).then(itemsOf).catch(() => [] as NessieLoan[]))),
+    Promise.all(accounts.filter((a) => !loansFrom || loansFrom.includes(a.id)).map((a) => nessieGet<Page<NessieLoan>>(`/accounts/${a.id}/loans?limit=100`).then(itemsOf).catch(() => [] as NessieLoan[]))),
     Promise.all(accounts.map((a) => nessieGet<Page<NessieTxn> | NessieTxn[]>(`/accounts/${a.id}/transactions?limit=50`).then(itemsOf).catch(() => [] as NessieTxn[]))),
   ]);
 
@@ -117,7 +124,7 @@ async function loadCompany(chosen: Customer, pool: number): Promise<Company> {
       pending: a.pending_debits_cents / 100,
       limit: a.credit_limit_cents ? a.credit_limit_cents / 100 : undefined,
     })),
-    loans: loans.flat().map((l) => ({ id: l.id, type: l.type, status: l.status, amount: l.amount_cents / 100, monthly: l.monthly_payment_cents / 100, accountId: l.account_id })),
+    loans: loans.flat().map((l) => ({ id: l.id, type: l.type, status: l.status, amount: l.amount_cents / 100, monthly: l.monthly_payment_cents / 100, accountId: l.account_id, description: l.description })),
     txns: activity,
     pool,
   };

@@ -2,7 +2,7 @@
 // Clerk itself refuses a second sign-up with the same email and shows an error when signing in to an unknown account.
 // Each Foresight account also gets a Nessie customer; its ID is kept on the Clerk user's public metadata.
 import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
-import { createCustomer, deleteCustomer, openAccount } from "./nessie";
+import { createCustomer, deleteCustomer } from "./nessie";
 import { DEMO_COOKIE } from "./auth-client";
 
 export { DEMO_COOKIE };
@@ -30,7 +30,7 @@ const settingUp = new Set<string>();
 /**
  * Runs once right after Clerk signs someone in. Returns where to send them:
  * - an existing member goes to their dashboard (the company one for companies);
- * - a brand-new sign-up (it carries the details from our form) gets a Nessie customer, then onboarding;
+ * - a brand-new sign-up (it carries the details from our form) gets a Nessie customer (no accounts yet), then onboarding;
  * - anyone else (e.g. "Sign in with Google" for a Google account that never signed up, which Clerk turns into a new
  *   user) is removed again and told to create an account first.
  */
@@ -57,18 +57,11 @@ export async function finishSignIn(): Promise<string> {
   let customerId = "";
   try {
     const customer = type === "company" ? await createCustomer(companyName, "Company") : await createCustomer(firstName, lastName);
-    customerId = customer.id;
-    if (type === "company") {
-      await openAccount(customerId, "Checking", "Business Checking");
-      await openAccount(customerId, "Savings", "Business Savings");
-    } else {
-      await openAccount(customerId, "Checking", "Everyday Checking");
-      await openAccount(customerId, "Savings", "Savings");
-    }
+    customerId = customer.id; // no accounts yet: the member adds their own on the Accounts tab
     const name = type === "company" ? companyName : `${firstName} ${lastName}`;
     await client.users.updateUser(userId, type === "company" ? { firstName: companyName } : { firstName, lastName });
     await client.users.updateUserMetadata(userId, { publicMetadata: { type, name, nessieCustomerId: customerId } });
-    return "/onboarding"; // onboarding preselects Individual or Company and then opens the right dashboard
+    return "/onboarding"; // onboarding ends on the dashboard, which opens on Accounts until they have some
   } catch {
     if (customerId) await deleteCustomer(customerId);
     return "/start?mode=signup&error=failed";

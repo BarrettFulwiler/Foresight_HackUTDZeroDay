@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { currentMember } from "../../../../lib/auth";
+import { memberAccounts } from "../../../../lib/member-accounts";
 import { BIZ_TAG } from "../../../../lib/companies";
 import { NessieError, createTransfer, getAccount, nessieGet, settleEarly } from "../../../../lib/nessie";
 import { invalidateLiveBalances, linkedNessieIds } from "../../../../lib/live-accounts";
@@ -24,14 +26,20 @@ export async function POST(req: NextRequest) {
   if (!fromId || !toId) return bad("Pick two linked accounts.");
   if (fromId === toId) return bad("Choose two different accounts.");
   if (!Number.isFinite(cents) || cents < 1) return bad("Enter an amount greater than $0.");
-  if (!companyId) {
+  // A signed-in member can only move money between their own accounts (never the hidden loan holder).
+  const member = await currentMember();
+  if (!member && !companyId) {
     const allowed = linkedNessieIds();
     if (!allowed.has(fromId) || !allowed.has(toId)) return bad("Pick two linked accounts.");
   }
 
   try {
+    if (member) {
+      const { list } = await memberAccounts(member);
+      if (!list.some((a) => a.id === fromId) || !list.some((a) => a.id === toId)) return bad("Pick two of your own accounts.");
+    }
     const from = await getAccount(fromId);
-    if (companyId) {
+    if (companyId && !member) {
       // Both accounts must belong to this company, and it must be one of the seeded "[Biz]" companies.
       const [to, owner] = await Promise.all([getAccount(toId), nessieGet<{ first_name?: string }>(`/customers/${encodeURIComponent(companyId)}`)]);
       if (!owner?.first_name?.endsWith(BIZ_TAG) || from.customer_id !== companyId || to.customer_id !== companyId) return bad("Pick two of the company's accounts.");

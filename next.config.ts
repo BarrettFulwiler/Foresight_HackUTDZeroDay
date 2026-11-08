@@ -13,6 +13,7 @@ const clerkHost = (() => {
 })();
 const clerk = clerkHost ? ` ${clerkHost}` : "";
 const captcha = " https://challenges.cloudflare.com";
+const clerkProtect = " https://cdn.protect.clerk.com"; // Clerk's bot protection on sign-up
 
 const config: NextConfig = {
   poweredByHeader: false,
@@ -22,7 +23,7 @@ const config: NextConfig = {
       { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "same-origin" },
       { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-      { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "") + clerk + captcha + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.clerk.com; connect-src 'self'" + clerk + "; frame-src" + captcha + "; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
+      { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "") + clerk + captcha + clerkProtect + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://img.clerk.com; connect-src 'self'" + clerk + clerkProtect + "; frame-src" + captcha + "; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
     ] }];
   },
 };

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { currentMember } from "../../../lib/auth";
 import { getDashboardData } from "../../../lib/finance";
+import { memberDashboard } from "../../../lib/member-accounts";
 import { runForecast, type Scenario } from "../../../lib/forecast";
 import { withLiveBalances } from "../../../lib/live-accounts";
 
@@ -9,8 +11,12 @@ export const dynamic = "force-dynamic";
 // POST /api/forecast { scenario } → the same forecast with a what-if applied.
 // Returns a compact summary plus month-end points (daily checking points with ?daily=1).
 async function forecast(scenario: Scenario, daily: boolean) {
-  const data = getDashboardData("C005");
-  const live = await withLiveBalances(data.accounts);
+  // Signed-in members forecast their own accounts; everyone else gets the demo customer.
+  const member = await currentMember();
+  const own = member ? await memberDashboard(member).catch(() => null) : null;
+  if (member && !own?.ready) return { error: "Add your accounts on the Accounts tab first." };
+  const data = own ? own.data : getDashboardData("C005");
+  const live = own ? { accounts: data.accounts, source: "nessie" as const } : await withLiveBalances(data.accounts);
   const f = runForecast(live.accounts, data.schedule, data.asOf, scenario);
   return {
     source: live.source,

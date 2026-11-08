@@ -89,7 +89,7 @@ export default function MoneySummary({ accounts, source, layout = "cards", busin
           <p className={styles.cardSub}>
             {business
               ? `${accounts.filter((a) => a.kind !== "loan").length} business accounts and ${accounts.filter((a) => a.kind === "loan").length} loans · live from Nessie`
-              : <>{accounts.length} accounts at 2 banks · {source === "nessie" ? `${accounts.filter((a) => a.live).length} with live balances from Nessie` : "Nessie unavailable, showing demo balances"}</>}
+              : <>{accounts.length} accounts at {new Set(accounts.map((a) => a.bank)).size === 1 ? accounts[0]?.bank ?? "PNC" : `${new Set(accounts.map((a) => a.bank)).size} banks`} ·{source === "nessie" ? `${accounts.filter((a) => a.live).length} with live balances from Nessie` : "Nessie unavailable, showing demo balances"}</>}
           </p>
         </div>
         {layout === "cards" && (

@@ -1,0 +1,99 @@
+/* Account pie charts on View (account-pies.tsx). */
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.panel {
+  background: var(--panel, #fff);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 12px 32px #1b2a5a12;
+  min-width: 0;
+}
+.title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 750;
+}
+.sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted, #667085);
+}
+.empty {
+  margin: 18px 0 0;
+  padding: 20px;
+  border: 1.5px dashed var(--line, #e7eaf3);
+  border-radius: 14px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted, #667085);
+}
+.body {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  margin-top: 14px;
+}
+.chart {
+  width: 150px;
+  height: 150px;
+}
+.centerLabel {
+  font-size: 9px;
+  fill: var(--muted, #667085);
+}
+.centerValue {
+  font-size: 14px;
+  font-weight: 750;
+  fill: var(--ink, #0e1726);
+}
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.legend li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+.legend li.on {
+  background: #f1f3f9;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.val {
+  font-weight: 650;
+}
+.pct {
+  text-align: right;
+  color: var(--muted, #667085);
+}
+@media (max-width: 860px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 420px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+}

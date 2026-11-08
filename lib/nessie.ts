@@ -98,3 +98,7 @@ export async function deleteCustomer(customerId: string) {
   for (const a of accounts) await call(`/accounts/${a.id}`, { method: "DELETE" }).catch(() => {});
   await call(`/customers/${customerId}`, { method: "DELETE" }).catch(() => {});
 }
+
+/** A write to Nessie (POST, PATCH or DELETE) for routes this file doesn't wrap. Used by lib/member-accounts.ts. */
+export const nessieSend = <T>(method: "POST" | "PATCH" | "DELETE", path: string, body?: unknown) =>
+  call<T>(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });

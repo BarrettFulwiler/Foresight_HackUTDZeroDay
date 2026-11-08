@@ -103,7 +103,8 @@ export function companyAccounts(c: Company): Account[] {
 /** A typical month of the company's money movements, built from its real Nessie activity, cards and loans. */
 function companySchedule(c: Company, accounts: Account[]): { schedule: ScheduleEvent[]; spendTxns: { id: string; day: number; at: string; accountId: string; amount: number; kind: string; category: string }[] } {
   const byId = new Map(accounts.map((a) => [a.id, a]));
-  const operating = accounts.find((a) => a.type === "checking")!;
+  // Payments come from the operating (first checking) account, or any cash account if there is no checking.
+  const operating = accounts.find((a) => a.type === "checking") ?? accounts.find((a) => a.kind === "cash");
   const dayOf = (id: string) => (hash(id) % 27) + 1;
   const schedule: ScheduleEvent[] = [];
   const spendTxns: { id: string; day: number; at: string; accountId: string; amount: number; kind: string; category: string }[] = [];
@@ -113,13 +114,13 @@ function companySchedule(c: Company, accounts: Account[]): { schedule: ScheduleE
   for (const t of c.txns) {
     const a = byId.get(t.accountId);
     if (!a || t.status === "cancelled" || t.status === "declined") continue;
-    const day = dayOf(t.id);
-    if (t.kind === "deposit") ev(day, a.id, t.amount, "income", "deposit", "customer_payments", "Customer payments");
+    const day = t.day ?? dayOf(t.id);
+    if (t.kind === "deposit") ev(day, a.id, t.amount, "income", t.category === "paycheck" ? "paycheck" : "deposit", t.category ?? "customer_payments", t.label ?? "Customer payments");
     else if (t.kind === "purchase" || t.kind === "withdrawal") {
       const payroll = t.kind === "withdrawal" && /payroll/i.test(t.description);
-      const category = payroll ? "payroll" : (VENDOR_CATEGORY[t.description] ?? "other_spending");
+      const category = t.category ?? (payroll ? "payroll" : (VENDOR_CATEGORY[t.description] ?? "other_spending"));
       const kind = payroll ? "payroll" : t.kind;
-      ev(day, a.id, a.kind === "credit" ? t.amount : -t.amount, "expense", kind, category, payroll ? "Payroll run" : t.description);
+      ev(day, a.id, a.kind === "credit" ? t.amount : -t.amount, "expense", kind, category, t.label ?? (payroll ? "Payroll run" : t.description));
       spendTxns.push({ id: t.id, day, at: t.at.slice(0, 10), accountId: a.id, amount: t.amount, kind, category });
     } else if (t.kind === "transfer" && t.toId && byId.has(t.toId)) {
       ev(day, a.id, -t.amount, "internal_transfer", "transfer", "transfer", t.description);
@@ -130,13 +131,14 @@ function companySchedule(c: Company, accounts: Account[]): { schedule: ScheduleE
   // Each card is paid in full from the operating account (its purchases this month), on its own day.
   accounts.filter((a) => a.kind === "credit").forEach((card, i) => {
     const owed = schedule.filter((e) => e.accountId === card.id && e.flow === "expense").reduce((s, e) => s + e.delta, 0);
-    if (owed <= 0) return;
+    if (owed <= 0 || !operating) return;
     const day = Math.min(28, 24 + i);
     ev(day, operating.id, -owed, "internal_transfer", "payment", "debt_payment", "Card payment");
     ev(day, card.id, -owed, "internal_transfer", "payment", "debt_payment", "Card payment");
   });
   // Loan payments: the real monthly payment from Nessie, from the operating account.
   accounts.filter((a) => a.kind === "loan" && a.monthlyPayment > 0).forEach((loan, i) => {
+    if (!operating) return;
     const day = Math.min(28, 3 + i * 4);
     const label = `${loan.name} payment`;
     ev(day, operating.id, -loan.monthlyPayment, "internal_transfer", "payment", "debt_payment", label);
@@ -145,8 +147,10 @@ function companySchedule(c: Company, accounts: Account[]): { schedule: ScheduleE
   return { schedule: schedule.sort((a, b) => a.day - b.day), spendTxns };
 }
 
-export function companyDashboardData(c: Company, asOf: string): { data: DashboardData; info: CompanyInfo } {
-  const accounts = companyAccounts(c);
+// accounts: pass the member's own typed accounts (lib/member-accounts.ts) instead of the seeded companies' defaults.
+// steady: every past month equals the typical month (a member's own monthly income and expenses); otherwise ±15%.
+export function companyDashboardData(c: Company, asOf: string, accountsOverride?: Account[], opts: { steady?: boolean } = {}): { data: DashboardData; info: CompanyInfo } {
+  const accounts = accountsOverride ?? companyAccounts(c);
   const { schedule, spendTxns } = companySchedule(c, accounts);
   const byId = new Map(accounts.map((a) => [a.id, a]));
   const random = rng(hash(c.id));
@@ -161,7 +165,7 @@ export function companyDashboardData(c: Company, asOf: string): { data: Dashboar
   const allMonths = monthsBack(asOf, HISTORY_MONTHS);
   const factors = allMonths.map((_, i) => {
     const last = i === allMonths.length - 1;
-    const vary = () => (last ? 1 : 0.85 + random() * 0.3);
+    const vary = () => (last || opts.steady ? 1 : 0.85 + random() * 0.3);
     return { income: vary(), cats: Object.fromEntries(cats.map((k) => [k, vary()])) as Record<string, number> };
   });
 
@@ -194,7 +198,8 @@ export function companyDashboardData(c: Company, asOf: string): { data: Dashboar
   for (let i = allMonths.length - 1; i >= 0; i--) {
     history.unshift({ month: allMonths[i], value: r2(Math.max(0, value)) });
     const m = monthRows[i];
-    value -= m.income - m.spending - m.loanPayments;
+    // A member's history isn't known (only today's balances are), so it stays at today's total instead of guessing.
+    if (!opts.steady) value -= m.income - m.spending - m.loanPayments;
   }
 
   return {
