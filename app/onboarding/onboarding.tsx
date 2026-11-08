@@ -101,8 +101,8 @@ export default function Onboarding({ summary }: { summary: Summary }) {
               <h1 className={styles.stepTitle}>{p.name ? `Hi ${p.name}! ` : ""}Who is this for?</h1>
               <p className={styles.stepSub}>We&rsquo;ll tailor what you see to how you use money.</p>
               <div className={styles.choices} role="radiogroup" aria-label="Account type">
-                <Choice checked icon="🙋" title="Just me" text="My own accounts, bills and goals." onSelect={() => set("accountType", "individual")} />
-                <Choice checked={false} disabled icon="🏢" title="My company" text="Business accounts and payroll." tag="Coming soon" onSelect={() => {}} />
+                <Choice checked title="Just me" text="My own accounts, bills and goals." onSelect={() => set("accountType", "individual")} />
+                <Choice checked={false} disabled title="My company" text="Business accounts and payroll." tag="Coming soon" onSelect={() => {}} />
               </div>
             </>
           )}
@@ -162,7 +162,7 @@ export default function Onboarding({ summary }: { summary: Summary }) {
               <div className={styles.chips} role="group" aria-label="Goals">
                 {GOAL_OPTIONS.map((g) => (
                   <button key={g.kind} type="button" aria-pressed={p.goals.includes(g.kind)} className={p.goals.includes(g.kind) ? styles.chipOn : styles.chip} onClick={() => toggleGoal(g.kind)}>
-                    <span aria-hidden="true">{g.icon}</span> {g.label}
+                    {g.label}
                   </button>
                 ))}
               </div>
@@ -224,10 +224,9 @@ export default function Onboarding({ summary }: { summary: Summary }) {
   );
 }
 
-function Choice({ checked, disabled, icon, title, text, tag, small, onSelect }: { checked: boolean; disabled?: boolean; icon?: string; title: string; text: string; tag?: string; small?: boolean; onSelect: () => void }) {
+function Choice({ checked, disabled, title, text, tag, small, onSelect }: { checked: boolean; disabled?: boolean; title: string; text: string; tag?: string; small?: boolean; onSelect: () => void }) {
   return (
     <button type="button" role="radio" aria-checked={checked} aria-label={`${title}: ${text}${tag ? ` (${tag})` : ""}`} disabled={disabled} className={`${small ? styles.choiceSm : styles.choice} ${checked ? styles.choiceOn : ""}`} onClick={onSelect}>
-      {icon && <span className={styles.choiceIcon} aria-hidden="true">{icon}</span>}
       <span className={styles.choiceText}>
         <strong>{title}{tag && <em>{tag}</em>}</strong>
         <span>{text}</span>

@@ -191,7 +191,7 @@ export default function SpendingDonut({ months, txns, windowSize = 3 }: { months
                   onMouseLeave={() => setHover(null)}
                   tabIndex={listOpen ? 0 : -1}
                 >
-                  <span className={styles.catIcon} style={{ background: c.color }} aria-hidden="true">{c.icon}</span>
+                  <span className={styles.catIcon} style={{ background: c.color }} aria-hidden="true" />
                   <span className={styles.catBody}>
                     <span className={styles.catLine}>
                       <span>{c.label}</span>
@@ -245,7 +245,7 @@ function CategoryDetail({ cat, view, txns, onClose }: { cat: Cat; view: View; tx
   return (
     <article className={styles.detail} style={{ ["--cat" as string]: cat.color }} aria-label={`${cat.label} details`}>
       <header className={styles.detailHead}>
-        <span className={styles.catIcon} style={{ background: cat.color }} aria-hidden="true">{cat.icon}</span>
+        <span className={styles.catIcon} style={{ background: cat.color }} aria-hidden="true" />
         <div className={styles.detailTitle}>
           <h3>{cat.label}</h3>
           <p>{view.first === view.last ? shortMonth(view.first) : `${shortMonth(view.first)} – ${shortMonth(view.last)}`} · {(cat.share * 100).toFixed(1)}% of your spending</p>

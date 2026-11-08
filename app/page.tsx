@@ -17,14 +17,14 @@ const HERO_THREAD: Bubble[] = [
   { from: "you", text: STARTER_QUESTION },
   { from: "future", text: "Yes, if you move $300 from your Capital One savings in January. Without it, rent comes up $212 short." },
   { from: "you", text: "do it" },
-  { from: "future", text: "✅ Done. See you in March." },
+  { from: "future", text: "Done. See you in March." },
 ];
 
 const GUARD_THREAD: Bubble[] = [
   { from: "future", text: "Heads up from March-you: this $240 purchase pushes your trip back 3 weeks." },
   { from: "future", text: "Allow it anyway?" },
   { from: "you", text: "skip it" },
-  { from: "future", text: "Held. The trip stays on track. 🌴" },
+  { from: "future", text: "Held. The trip stays on track." },
 ];
 
 const BANKS = [

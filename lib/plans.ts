@@ -18,10 +18,10 @@ export type Plan = {
   withPlan: Forecast;
 };
 
-export const PRESETS: { id: PresetId; icon: string; title: string; blurb: string }[] = [
-  { id: "trip", icon: "🌴", title: "Take my trip", blurb: "Can I afford my goal?" },
-  { id: "payoff", icon: "💳", title: "Pay off my card", blurb: "Stop paying card interest" },
-  { id: "emergency", icon: "🚨", title: "Surprise $1,000 bill", blurb: "What if something breaks?" },
+export const PRESETS: { id: PresetId; title: string; blurb: string }[] = [
+  { id: "trip", title: "Take my trip", blurb: "Can I afford my goal?" },
+  { id: "payoff", title: "Pay off my card", blurb: "Stop paying card interest" },
+  { id: "emergency", title: "Surprise $1,000 bill", blurb: "What if something breaks?" },
 ];
 
 export const FLOOR = 200; // keep checking above this

@@ -50,7 +50,6 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
         <div className={styles.presets} role="radiogroup" aria-label="What-if">
           {PRESETS.map((p) => (
             <button key={p.id} type="button" role="radio" aria-checked={preset === p.id} className={preset === p.id ? styles.presetOn : styles.preset} onClick={() => setPreset(p.id)}>
-              <span className={styles.presetIcon} aria-hidden="true">{p.icon}</span>
               <span className={styles.presetText}>
                 <strong>{p.title}</strong>
                 <span>{p.blurb}</span>
@@ -63,11 +62,11 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
       <div className={styles.adviseRow}>
         <div className={styles.voices}>
           <section className={`${styles.panel} ${styles.voice} ${styles.voiceNow}`} aria-label="Now-you wants">
-            <p className={styles.voiceLabel}>🙋 Now-you wants</p>
+            <p className={styles.voiceLabel}>Now-you wants</p>
             <p className={styles.voiceWant}>{plan.want}</p>
           </section>
           <section className={`${styles.panel} ${styles.voice} ${styles.voiceFuture}`} aria-label="Future-you warns">
-            <p className={styles.voiceLabel}>🔮 Future-you warns</p>
+            <p className={styles.voiceLabel}>Future-you warns</p>
             <ul className={styles.voiceList}>
               {plan.warnings.map((w) => <li key={w}>{w}</li>)}
             </ul>
@@ -86,7 +85,7 @@ export default function Advising({ accounts, schedule, asOf, goal, live, receipt
           {plan.steps.map((s) => <li key={s}>{s}</li>)}
         </ol>
         <div className={styles.planOutcome}>
-          <p className={styles.voiceLabel}>✅ With the plan</p>
+          <p className={styles.voiceLabel}>With the plan</p>
           <ul className={styles.voiceList}>
             {plan.outcome.map((o) => <li key={o}>{o}</li>)}
           </ul>

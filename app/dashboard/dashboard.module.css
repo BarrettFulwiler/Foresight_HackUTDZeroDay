@@ -761,12 +761,9 @@
 }
 
 .catIcon {
-  width: 40px;
-  height: 40px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 18px;
   flex: none;
 }
 
@@ -1352,11 +1349,6 @@
 .presetOn:hover {
   border-color: var(--accent);
   background: #f4f6ff;
-}
-
-.presetIcon {
-  font-size: 26px;
-  line-height: 1;
 }
 
 .presetText {
